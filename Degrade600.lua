@@ -1,4 +1,4 @@
--- language: Lua (Luau), file: degrade_ultimate_v130.lua, target: DEGRADE, executor: Solara / Delta / Fluxus
+-- language: Lua (Luau), file: degrade_ultimate_v135.lua, target: DEGRADE, executor: Solara / Delta / Fluxus
 -- CREATOR SMOKExR'S | DEGRADE Ultimate Build (by Lokeii)
 
 local Players = game:GetService("Players")
@@ -7,8 +7,7 @@ local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 local Lighting = game:GetService("Lighting")
 local TweenService = game:GetService("TweenService")
-local Stats = game:GetService("Stats")
-local SoundService = game:GetService("SoundService")
+local HttpService = game:GetService("HttpService")
 local Camera = Workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
@@ -37,7 +36,7 @@ if not ok_rf or not Rayfield then
             t.Size = UDim2.new(1, -20, 1, -20)
             t.Position = UDim2.new(0, 10, 0, 10)
             t.BackgroundTransparency = 1
-            t.Text = "DEGRADE v130 — FALLBACK"
+            t.Text = "DEGRADE v135 — FALLBACK MODE"
             t.TextColor3 = Color3.fromRGB(255, 50, 50)
             t.Font = Enum.Font.GothamBold
             t.TextSize = 14
@@ -84,7 +83,7 @@ local sub = Instance.new("TextLabel")
 sub.Size = UDim2.new(1, 0, 0, 20)
 sub.Position = UDim2.new(0, 0, 0.48, 0)
 sub.BackgroundTransparency = 1
-sub.Text = "ULTIMATE v130  •  loading"
+sub.Text = "ULTIMATE v135  •  loading"
 sub.TextColor3 = Color3.fromRGB(150, 150, 150)
 sub.Font = Enum.Font.Gotham
 sub.TextSize = 14
@@ -186,71 +185,96 @@ local function world_to_screen(pos)
 end
 
 -- ============================================================
--- BASE & CHEST SCANNER (Data-driven)
+-- BASE & CHEST SCANNER (Data-driven with API Names)
 -- ============================================================
 local base_cache = {}
 local chest_cache = {}
+local name_cache = {}
 
-local function get_owner_name(uid)
-    if not uid then return "None" end
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p.UserId == tonumber(uid) then return p.Name end
+local function update_name_async(uid, label_object)
+    local uid_str = tostring(uid)
+    if name_cache[uid_str] then
+        label_object.Text = "Auth: " .. name_cache[uid_str]
+        return
     end
-    return "ID:" .. tostring(uid)
+    for _, p in ipairs(Players:GetPlayers()) do
+        if tostring(p.UserId) == uid_str then 
+            name_cache[uid_str] = p.Name
+            label_object.Text = "Auth: " .. p.Name
+            return 
+        end
+    end
+    task.spawn(function()
+        local ok, res = pcall(function()
+            local url = "https://users.roblox.com/v1/users/" .. uid_str
+            local raw = game:HttpGet(url)
+            local data = game:GetService("HttpService"):JSONDecode(raw)
+            return data.displayName or data.name
+        end)
+        if ok and res then
+            name_cache[uid_str] = res
+            if label_object and label_object.Parent then
+                label_object.Text = "Auth: " .. res
+            end
+        else
+            if label_object and label_object.Parent then
+                label_object.Text = "Auth: ID " .. uid_str
+            end
+        end
+    end)
 end
 
 local function scan_cupboards()
     if not Config.BaseScan.Enabled then return end
-    
-    -- Ищем внутри папки Buildings
     local buildings = Workspace:FindFirstChild("Buildings")
     if not buildings then return end
 
     for _, building in ipairs(buildings:GetChildren()) do
-        -- Ищем атрибуты на самой модели здания
         local attrs = building:GetAttributes()
-        
-        -- Если есть владелец или это шкаф
-        if attrs["OwnerId"] or attrs["Type"] == "ToolCupboard" or attrs["HasTC"] then
+        if attrs["Type"] == "ToolCupboard" or attrs["HasTC"] then
             local cabinet = building:FindFirstChild("Cabinet", true)
-            
             if cabinet and not base_cache[cabinet] then
-                local owner = get_owner_name(attrs["OwnerId"])
-                local auth_list = {}
-                
+                local auth_uids = {}
                 for k, v in pairs(attrs) do
                     if k:find("Auth_") and v == true then
-                        table.insert(auth_list, get_owner_name(k:gsub("Auth_", "")))
+                        table.insert(auth_uids, k:gsub("Auth_", ""))
                     end
                 end
-                
                 local bb = Instance.new("BillboardGui")
                 bb.Adornee = cabinet
-                bb.Size = UDim2.new(0, 250, 0, 60)
+                bb.Size = UDim2.new(0, 250, 0, 50)
                 bb.StudsOffset = Vector3.new(0, cabinet.Size.Y / 2 + 2, 0)
                 bb.AlwaysOnTop = true
                 bb.Parent = cabinet
                 
                 local l1 = Instance.new("TextLabel")
-                l1.Size = UDim2.new(1, 0, 0.4, 0); l1.BackgroundTransparency = 1
-                l1.Text = "CUPBOARD"; l1.TextColor3 = Color3.fromRGB(0, 255, 0)
+                l1.Size = UDim2.new(1, 0, 0.5, 0); l1.BackgroundTransparency = 1
+                l1.Text = "CABINET"; l1.TextColor3 = Config.BaseScan.CupboardColor
                 l1.Font = Enum.Font.GothamBold; l1.TextSize = 16; l1.Parent = bb
                 
-                local l2 = Instance.new("TextLabel")
-                l2.Size = UDim2.new(1, 0, 0.3, 0); l2.Position = UDim2.new(0, 0, 0.4, 0)
-                l2.BackgroundTransparency = 1; l2.Text = "Owner: " .. owner
-                l2.TextColor3 = Color3.fromRGB(255, 255, 255); l2.TextSize = 12; l2.Parent = bb
-                
                 local l3 = Instance.new("TextLabel")
-                l3.Size = UDim2.new(1, 0, 0.3, 0); l3.Position = UDim2.new(0, 0, 0.7, 0)
-                l3.BackgroundTransparency = 1; l3.Text = "Auth: " .. (#auth_list > 0 and table.concat(auth_list, ", ") or "None")
-                l3.TextColor3 = Color3.fromRGB(200, 200, 200); l3.TextSize = 11; l3.Parent = bb
+                l3.Size = UDim2.new(1, 0, 0.5, 0); l3.Position = UDim2.new(0, 0, 0.5, 0)
+                l3.BackgroundTransparency = 1; l3.Text = "Auth: Loading..."
+                l3.TextColor3 = Color3.fromRGB(255, 255, 255); l3.TextSize = 12; l3.Parent = bb
                 
-                base_cache[cabinet] = {gui = bb}
+                base_cache[cabinet] = {gui = bb, auth_label = l3, uids = auth_uids}
+                
+                task.spawn(function()
+                    local names = {}
+                    for _, uid in ipairs(auth_uids) do
+                        update_name_async(uid, l3)
+                        table.insert(names, name_cache[uid] or ("ID:"..uid))
+                        task.wait(0.2)
+                    end
+                    if l3 and l3.Parent then
+                        l3.Text = "Auth: " .. (#names > 0 and table.concat(names, ", ") or "None")
+                    end
+                end)
             end
         end
     end
 end
+
 local function scan_chests()
     if not Config.ChestScan.Enabled then return end
     local deployables = Workspace:FindFirstChild("Deployables")
@@ -261,7 +285,6 @@ local function scan_chests()
                 local primary = obj:FindFirstChildWhichIsA("BasePart")
                 if primary then
                     local bb = Instance.new("BillboardGui")
-                    bb.Name = "LokeiiChestBB"
                     bb.Adornee = primary
                     bb.Size = UDim2.new(0, 150, 0, 40)
                     bb.StudsOffset = Vector3.new(0, primary.Size.Y / 2 + 1, 0)
@@ -269,24 +292,14 @@ local function scan_chests()
                     bb.Parent = primary
                     
                     local label = Instance.new("TextLabel")
-                    label.Size = UDim2.new(1, 0, 0.5, 0)
-                    label.BackgroundTransparency = 1
-                    label.Text = "CHEST"
-                    label.TextColor3 = Config.ChestScan.Color
-                    label.TextStrokeTransparency = 0
-                    label.Font = Enum.Font.GothamBold
-                    label.TextSize = 16
-                    label.Parent = bb
+                    label.Size = UDim2.new(1, 0, 0.5, 0); label.BackgroundTransparency = 1
+                    label.Text = "CHEST"; label.TextColor3 = Config.ChestScan.Color
+                    label.Font = Enum.Font.GothamBold; label.TextSize = 16; label.Parent = bb
                     
                     local hp_lbl = Instance.new("TextLabel")
-                    hp_lbl.Size = UDim2.new(1, 0, 0.5, 0)
-                    hp_lbl.Position = UDim2.new(0, 0, 0.5, 0)
-                    hp_lbl.BackgroundTransparency = 1
-                    hp_lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
-                    hp_lbl.TextStrokeTransparency = 0
-                    hp_lbl.Font = Enum.Font.Gotham
-                    hp_lbl.TextSize = 12
-                    hp_lbl.Parent = bb
+                    hp_lbl.Size = UDim2.new(1, 0, 0.5, 0); hp_lbl.Position = UDim2.new(0, 0, 0.5, 0)
+                    hp_lbl.BackgroundTransparency = 1; hp_lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+                    hp_lbl.TextSize = 12; hp_lbl.Parent = bb
                     
                     chest_cache[obj] = {gui = bb, hp = hp_lbl}
                 end
@@ -339,7 +352,7 @@ local function clear_base_cache()
 end
 
 -- ============================================================
--- ORE SCANNER (Data-driven: Boulder/Rock)
+-- ORE SCANNER
 -- ============================================================
 local ore_cache = {}
 local function scan_ores()
@@ -349,7 +362,6 @@ local function scan_ores()
             local rock = obj:FindFirstChild("Rock")
             if rock and rock:IsA("MeshPart") and not ore_cache[obj] then
                 local bb = Instance.new("BillboardGui")
-                bb.Name = "LokeiiOreBB"
                 bb.Adornee = rock
                 bb.Size = UDim2.new(0, 100, 0, 30)
                 bb.StudsOffset = Vector3.new(0, rock.Size.Y / 2 + 1, 0)
@@ -361,7 +373,6 @@ local function scan_ores()
                 label.BackgroundTransparency = 1
                 label.Text = "ROCK"
                 label.TextColor3 = Config.OreESP.Color
-                label.TextStrokeTransparency = 0
                 label.Font = Enum.Font.GothamBold
                 label.TextSize = 14
                 label.Parent = bb
@@ -764,10 +775,10 @@ Rayfield.CreateWindow = function(self, opts)
 end
 
 local Window = Rayfield:CreateWindow({
-    Name = "DEGRADE | ULTIMATE v130",
+    Name = "DEGRADE | ULTIMATE v135",
     LoadingTitle = "DEGRADE",
     LoadingSubtitle = "Ultimate Scanner",
-    ConfigurationSaving = { Enabled = false, FolderName = "DegradeBuild", FileName = "v130" },
+    ConfigurationSaving = { Enabled = false, FolderName = "DegradeBuild", FileName = "v135" },
     KeySystem = false,
 })
 
@@ -836,5 +847,5 @@ SettingsTab:CreateToggle({Name="Anti-AFK", CurrentValue=false, Flag="antiafk", C
 SettingsTab:CreateLabel("Panic Key: Right Shift")
 
 task.delay(10, function()
-    send_notif("DEGRADE", "Ultimate Build v130 Loaded.", Color3.fromRGB(0, 200, 255))
+    send_notif("DEGRADE", "Ultimate Build v135 Loaded.", Color3.fromRGB(0, 200, 255))
 end)
