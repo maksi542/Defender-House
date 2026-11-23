@@ -203,57 +203,56 @@ local function scan_cupboards()
     if not Config.BaseScan.Enabled then return end
     for _, obj in ipairs(Workspace:GetDescendants()) do
         if obj.Name == "Cabinet" and obj:IsA("Part") then
+            
+            -- Ищем данные в родителе (Building) или в самом объекте
+            local parent = obj.Parent
+            local owner_id = nil
+            local auth_list = {}
+            
+            -- Проверяем атрибуты самого Cabinet
             local attrs = obj:GetAttributes()
-            if attrs["Type"] == "ToolCupboard" and not base_cache[obj] then
-                local owner = get_owner_name(attrs["OwnerId"])
-                local auth_list = {}
-                for k, v in pairs(attrs) do
+            if attrs["OwnerId"] then owner_id = attrs["OwnerId"] end
+            
+            -- Если нет в Cabinet, ищем в родителе (Building)
+            if not owner_id and parent then
+                local p_attrs = parent:GetAttributes()
+                if p_attrs["OwnerId"] then owner_id = p_attrs["OwnerId"] end
+                
+                -- Собираем Auth из родителя
+                for k, v in pairs(p_attrs) do
                     if k:find("Auth_") and v == true then
                         local uid = k:gsub("Auth_", "")
                         table.insert(auth_list, get_owner_name(uid))
                     end
                 end
+            end
+            
+            -- Если нашли владельца, рисуем
+            if owner_id and not base_cache[obj] then
+                local owner = get_owner_name(owner_id)
                 local auth_str = #auth_list > 0 and table.concat(auth_list, ", ") or "None"
                 
                 local bb = Instance.new("BillboardGui")
-                bb.Name = "LokeiiCabinetBB"
                 bb.Adornee = obj
                 bb.Size = UDim2.new(0, 250, 0, 60)
                 bb.StudsOffset = Vector3.new(0, obj.Size.Y / 2 + 2, 0)
                 bb.AlwaysOnTop = true
                 bb.Parent = obj
                 
-                local label = Instance.new("TextLabel")
-                label.Size = UDim2.new(1, 0, 0.4, 0)
-                label.BackgroundTransparency = 1
-                label.Text = "CUPBOARD"
-                label.TextColor3 = Config.BaseScan.CupboardColor
-                label.TextStrokeTransparency = 0
-                label.Font = Enum.Font.GothamBold
-                label.TextSize = 16
-                label.Parent = bb
+                local l1 = Instance.new("TextLabel")
+                l1.Size = UDim2.new(1, 0, 0.4, 0); l1.BackgroundTransparency = 1
+                l1.Text = "CUPBOARD"; l1.TextColor3 = Config.BaseScan.CupboardColor
+                l1.Font = Enum.Font.GothamBold; l1.TextSize = 16; l1.Parent = bb
                 
-                local owner_lbl = Instance.new("TextLabel")
-                owner_lbl.Size = UDim2.new(1, 0, 0.3, 0)
-                owner_lbl.Position = UDim2.new(0, 0, 0.4, 0)
-                owner_lbl.BackgroundTransparency = 1
-                owner_lbl.Text = "Owner: " .. owner
-                owner_lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
-                owner_lbl.TextStrokeTransparency = 0
-                owner_lbl.Font = Enum.Font.Gotham
-                owner_lbl.TextSize = 12
-                owner_lbl.Parent = bb
+                local l2 = Instance.new("TextLabel")
+                l2.Size = UDim2.new(1, 0, 0.3, 0); l2.Position = UDim2.new(0, 0, 0.4, 0)
+                l2.BackgroundTransparency = 1; l2.Text = "Owner: " .. owner
+                l2.TextColor3 = Color3.fromRGB(255, 255, 255); l2.TextSize = 12; l2.Parent = bb
                 
-                local auth_lbl = Instance.new("TextLabel")
-                auth_lbl.Size = UDim2.new(1, 0, 0.3, 0)
-                auth_lbl.Position = UDim2.new(0, 0, 0.7, 0)
-                auth_lbl.BackgroundTransparency = 1
-                auth_lbl.Text = "Auth: " .. auth_str
-                auth_lbl.TextColor3 = Color3.fromRGB(200, 200, 200)
-                auth_lbl.TextStrokeTransparency = 0
-                auth_lbl.Font = Enum.Font.Gotham
-                auth_lbl.TextSize = 11
-                auth_lbl.Parent = bb
+                local l3 = Instance.new("TextLabel")
+                l3.Size = UDim2.new(1, 0, 0.3, 0); l3.Position = UDim2.new(0, 0, 0.7, 0)
+                l3.BackgroundTransparency = 1; l3.Text = "Auth: " .. auth_str
+                l3.TextColor3 = Color3.fromRGB(200, 200, 200); l3.TextSize = 11; l3.Parent = bb
                 
                 base_cache[obj] = {gui = bb}
             end
