@@ -1,4 +1,4 @@
--- language: Lua (Luau), file: degrade_ultimate_v160.lua, target: DEGRADE, executor: Solara / Delta / Fluxus
+-- language: Lua (Luau), file: degrade_ultimate_v161.lua, target: DEGRADE, executor: Solara / Delta / Fluxus
 -- CREATOR SMOKExR'S | DEGRADE Ultimate Build (by Lokeii)
 
 local Players = game:GetService("Players")
@@ -7,6 +7,7 @@ local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 local Lighting = game:GetService("Lighting")
 local TweenService = game:GetService("TweenService")
+local HttpService = game:GetService("HttpService")
 local Camera = Workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
@@ -35,7 +36,7 @@ if not ok_rf or not Rayfield then
             t.Size = UDim2.new(1, -20, 1, -20)
             t.Position = UDim2.new(0, 10, 0, 10)
             t.BackgroundTransparency = 1
-            t.Text = "DEGRADE v160 — FALLBACK MODE"
+            t.Text = "DEGRADE v161 — FALLBACK MODE"
             t.TextColor3 = Color3.fromRGB(255, 50, 50)
             t.Font = Enum.Font.GothamBold
             t.TextSize = 14
@@ -82,7 +83,7 @@ local sub = Instance.new("TextLabel")
 sub.Size = UDim2.new(1, 0, 0, 20)
 sub.Position = UDim2.new(0, 0, 0.48, 0)
 sub.BackgroundTransparency = 1
-sub.Text = "ULTIMATE v160  •  loading"
+sub.Text = "ULTIMATE v161  •  loading"
 sub.TextColor3 = Color3.fromRGB(150, 150, 150)
 sub.Font = Enum.Font.Gotham
 sub.TextSize = 14
@@ -717,10 +718,10 @@ Rayfield.CreateWindow = function(self, opts)
 end
 
 local Window = Rayfield:CreateWindow({
-    Name = "DEGRADE | ULTIMATE v160",
+    Name = "DEGRADE | ULTIMATE v161",
     LoadingTitle = "DEGRADE",
     LoadingSubtitle = "Ultimate Scanner",
-    ConfigurationSaving = { Enabled = false, FolderName = "DegradeBuild", FileName = "v160" },
+    ConfigurationSaving = { Enabled = false, FolderName = "DegradeBuild", FileName = "v161" },
     KeySystem = false,
 })
 
@@ -773,6 +774,37 @@ BaseTab:CreateToggle({Name="Enable Chest Scanner", CurrentValue=false, Flag="che
 BaseTab:CreateSlider({Name="Chest Max Dist", Range={100,2000}, Increment=100, CurrentValue=500, Flag="chest_dist", Callback=function(v) Config.ChestScan.MaxDistance=v end})
 BaseTab:CreateColorPicker({Name="Chest Color", Color=Config.ChestScan.Color, Flag="chest_col", Callback=function(c) Config.ChestScan.Color=c end})
 
+BaseTab:CreateSection("Debug")
+BaseTab:CreateButton({
+    Name="Force Scan (Console)",
+    Callback=function()
+        print("=== CUPBOARD ATTRIBUTES ===")
+        local found = false
+        for _, obj in ipairs(Workspace:GetDescendants()) do
+            if obj.Name == "Cabinet" then
+                found = true
+                print("Cabinet found in:", obj.Parent and obj.Parent.Name or "nil")
+                if obj.Parent then
+                    local attrs = obj.Parent:GetAttributes()
+                    for k, v in pairs(attrs) do
+                        print("  [Building Attr]", k, "=", tostring(v))
+                    end
+                end
+                local c_attrs = obj:GetAttributes()
+                for k, v in pairs(c_attrs) do
+                    print("  [Cabinet Attr]", k, "=", tostring(v))
+                end
+                print("=== END ===")
+                break
+            end
+        end
+        if not found then
+            print("[ERROR] No Cabinet found in Workspace!")
+            print("=== END ===")
+        end
+    end
+})
+
 local ModTab = Window:CreateTab("Mods")
 ModTab:CreateSection("Behavior Detector")
 ModTab:CreateToggle({Name="Suspect ESP (Force Red Box)", CurrentValue=false, Flag="mod_esp", Callback=function(v) Config.Mod.Enabled=v send_notif("SUSPECT ESP", v and "Enabled" or "Disabled", Color3.fromRGB(255,50,50)) end})
@@ -789,5 +821,5 @@ SettingsTab:CreateToggle({Name="Anti-AFK", CurrentValue=false, Flag="antiafk", C
 SettingsTab:CreateLabel("Panic Key: Right Shift")
 
 task.delay(10, function()
-    send_notif("DEGRADE", "Ultimate Build v160 Loaded.", Color3.fromRGB(0, 200, 255))
+    send_notif("DEGRADE", "Ultimate Build v161 Loaded.", Color3.fromRGB(0, 200, 255))
 end)
