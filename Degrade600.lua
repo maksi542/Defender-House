@@ -1,11 +1,10 @@
--- language: Lua (Luau), file: degrade_ultimate_v161.lua, target: DEGRADE, executor: Solara / Delta / Fluxus
+-- language: Lua (Luau), file: degrade_ultimate_v162.lua, target: DEGRADE, executor: Solara / Delta / Fluxus
 -- CREATOR SMOKExR'S | DEGRADE Ultimate Build (by Lokeii)
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
-local Lighting = game:GetService("Lighting")
 local TweenService = game:GetService("TweenService")
 local HttpService = game:GetService("HttpService")
 local Camera = Workspace.CurrentCamera
@@ -36,7 +35,7 @@ if not ok_rf or not Rayfield then
             t.Size = UDim2.new(1, -20, 1, -20)
             t.Position = UDim2.new(0, 10, 0, 10)
             t.BackgroundTransparency = 1
-            t.Text = "DEGRADE v161 — FALLBACK MODE"
+            t.Text = "DEGRADE v162 — FALLBACK MODE"
             t.TextColor3 = Color3.fromRGB(255, 50, 50)
             t.Font = Enum.Font.GothamBold
             t.TextSize = 14
@@ -83,7 +82,7 @@ local sub = Instance.new("TextLabel")
 sub.Size = UDim2.new(1, 0, 0, 20)
 sub.Position = UDim2.new(0, 0, 0.48, 0)
 sub.BackgroundTransparency = 1
-sub.Text = "ULTIMATE v161  •  loading"
+sub.Text = "ULTIMATE v162  •  loading"
 sub.TextColor3 = Color3.fromRGB(150, 150, 150)
 sub.Font = Enum.Font.Gotham
 sub.TextSize = 14
@@ -185,10 +184,31 @@ local function world_to_screen(pos)
 end
 
 -- ============================================================
--- BASE & CHEST SCANNER (Simplified)
+-- BASE & CHEST SCANNER (Fixed Auth)
 -- ============================================================
 local base_cache = {}
 local chest_cache = {}
+local name_cache = {}
+
+local function get_name_async(uid)
+    local uid_str = tostring(uid)
+    if name_cache[uid_str] then return name_cache[uid_str] end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if tostring(p.UserId) == uid_str then 
+            name_cache[uid_str] = p.Name
+            return p.Name
+        end
+    end
+    local ok, res = pcall(function()
+        local raw = game:HttpGet("https://users.roblox.com/v1/users/" .. uid_str)
+        return HttpService:JSONDecode(raw).displayName
+    end)
+    if ok and res then
+        name_cache[uid_str] = res
+        return res
+    end
+    return "ID:" .. uid_str
+end
 
 local function scan_cupboards()
     if not Config.BaseScan.Enabled then return end
@@ -200,19 +220,57 @@ local function scan_cupboards()
         if attrs["Type"] == "ToolCupboard" or attrs["HasTC"] then
             local cabinet = building:FindFirstChild("Cabinet", true)
             if cabinet and not base_cache[cabinet] then
+                local auth_uids = {}
+                
+                -- Собираем Owner и Auth
+                if attrs["OwnerId"] then
+                    table.insert(auth_uids, tostring(attrs["OwnerId"]))
+                end
+                for k, v in pairs(attrs) do
+                    if k:find("Auth_") and v == true then
+                        local uid = k:gsub("Auth_", "")
+                        -- Проверяем, нет ли уже этого ID
+                        local exists = false
+                        for _, existing in ipairs(auth_uids) do
+                            if existing == uid then exists = true break end
+                        end
+                        if not exists then table.insert(auth_uids, uid) end
+                    end
+                end
+
                 local bb = Instance.new("BillboardGui")
                 bb.Adornee = cabinet
-                bb.Size = UDim2.new(0, 200, 0, 30)
+                bb.Size = UDim2.new(0, 250, 0, 50)
                 bb.StudsOffset = Vector3.new(0, cabinet.Size.Y / 2 + 2, 0)
                 bb.AlwaysOnTop = true
                 bb.Parent = cabinet
                 
                 local l1 = Instance.new("TextLabel")
-                l1.Size = UDim2.new(1, 0, 1, 0); l1.BackgroundTransparency = 1
-                l1.Text = "TOOL CUPBOARD"; l1.TextColor3 = Config.BaseScan.CupboardColor
+                l1.Size = UDim2.new(1, 0, 0.5, 0); l1.BackgroundTransparency = 1
+                l1.Text = "CABINET"; l1.TextColor3 = Config.BaseScan.CupboardColor
                 l1.Font = Enum.Font.GothamBold; l1.TextSize = 16; l1.Parent = bb
                 
-                base_cache[cabinet] = {gui = bb}
+                local l3 = Instance.new("TextLabel")
+                l3.Size = UDim2.new(1, 0, 0.5, 0); l3.Position = UDim2.new(0, 0, 0.5, 0)
+                l3.BackgroundTransparency = 1; l3.Text = "Loading..."
+                l3.TextColor3 = Color3.fromRGB(255, 255, 255); l3.TextSize = 12; l3.Parent = bb
+                
+                base_cache[cabinet] = {gui = bb, label = l3}
+                
+                task.spawn(function()
+                    local names = {}
+                    for _, uid in ipairs(auth_uids) do
+                        local name = get_name_async(uid)
+                        table.insert(names, name)
+                        if l3 and l3.Parent then
+                            l3.Text = "Auth: " .. table.concat(names, ", ")
+                        end
+                        task.wait(0.1)
+                    end
+                    if l3 and l3.Parent then
+                        l3.Text = "Auth: " .. (#names > 0 and table.concat(names, ", ") or "None")
+                    end
+                end)
             end
         end
     end
@@ -718,10 +776,10 @@ Rayfield.CreateWindow = function(self, opts)
 end
 
 local Window = Rayfield:CreateWindow({
-    Name = "DEGRADE | ULTIMATE v161",
+    Name = "DEGRADE | ULTIMATE v162",
     LoadingTitle = "DEGRADE",
     LoadingSubtitle = "Ultimate Scanner",
-    ConfigurationSaving = { Enabled = false, FolderName = "DegradeBuild", FileName = "v161" },
+    ConfigurationSaving = { Enabled = false, FolderName = "DegradeBuild", FileName = "v162" },
     KeySystem = false,
 })
 
@@ -774,37 +832,6 @@ BaseTab:CreateToggle({Name="Enable Chest Scanner", CurrentValue=false, Flag="che
 BaseTab:CreateSlider({Name="Chest Max Dist", Range={100,2000}, Increment=100, CurrentValue=500, Flag="chest_dist", Callback=function(v) Config.ChestScan.MaxDistance=v end})
 BaseTab:CreateColorPicker({Name="Chest Color", Color=Config.ChestScan.Color, Flag="chest_col", Callback=function(c) Config.ChestScan.Color=c end})
 
-BaseTab:CreateSection("Debug")
-BaseTab:CreateButton({
-    Name="Force Scan (Console)",
-    Callback=function()
-        print("=== CUPBOARD ATTRIBUTES ===")
-        local found = false
-        for _, obj in ipairs(Workspace:GetDescendants()) do
-            if obj.Name == "Cabinet" then
-                found = true
-                print("Cabinet found in:", obj.Parent and obj.Parent.Name or "nil")
-                if obj.Parent then
-                    local attrs = obj.Parent:GetAttributes()
-                    for k, v in pairs(attrs) do
-                        print("  [Building Attr]", k, "=", tostring(v))
-                    end
-                end
-                local c_attrs = obj:GetAttributes()
-                for k, v in pairs(c_attrs) do
-                    print("  [Cabinet Attr]", k, "=", tostring(v))
-                end
-                print("=== END ===")
-                break
-            end
-        end
-        if not found then
-            print("[ERROR] No Cabinet found in Workspace!")
-            print("=== END ===")
-        end
-    end
-})
-
 local ModTab = Window:CreateTab("Mods")
 ModTab:CreateSection("Behavior Detector")
 ModTab:CreateToggle({Name="Suspect ESP (Force Red Box)", CurrentValue=false, Flag="mod_esp", Callback=function(v) Config.Mod.Enabled=v send_notif("SUSPECT ESP", v and "Enabled" or "Disabled", Color3.fromRGB(255,50,50)) end})
@@ -821,5 +848,5 @@ SettingsTab:CreateToggle({Name="Anti-AFK", CurrentValue=false, Flag="antiafk", C
 SettingsTab:CreateLabel("Panic Key: Right Shift")
 
 task.delay(10, function()
-    send_notif("DEGRADE", "Ultimate Build v161 Loaded.", Color3.fromRGB(0, 200, 255))
+    send_notif("DEGRADE", "Ultimate Build v162 Loaded.", Color3.fromRGB(0, 200, 255))
 end)
