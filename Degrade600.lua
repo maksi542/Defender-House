@@ -1,4 +1,4 @@
--- language: Lua (Luau), file: degrade_ultimate_v150.lua, target: DEGRADE, executor: Solara / Delta / Fluxus
+-- language: Lua (Luau), file: degrade_ultimate_v160.lua, target: DEGRADE, executor: Solara / Delta / Fluxus
 -- CREATOR SMOKExR'S | DEGRADE Ultimate Build (by Lokeii)
 
 local Players = game:GetService("Players")
@@ -7,7 +7,6 @@ local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 local Lighting = game:GetService("Lighting")
 local TweenService = game:GetService("TweenService")
-local HttpService = game:GetService("HttpService")
 local Camera = Workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
@@ -36,7 +35,7 @@ if not ok_rf or not Rayfield then
             t.Size = UDim2.new(1, -20, 1, -20)
             t.Position = UDim2.new(0, 10, 0, 10)
             t.BackgroundTransparency = 1
-            t.Text = "DEGRADE v150 — FALLBACK MODE"
+            t.Text = "DEGRADE v160 — FALLBACK MODE"
             t.TextColor3 = Color3.fromRGB(255, 50, 50)
             t.Font = Enum.Font.GothamBold
             t.TextSize = 14
@@ -83,7 +82,7 @@ local sub = Instance.new("TextLabel")
 sub.Size = UDim2.new(1, 0, 0, 20)
 sub.Position = UDim2.new(0, 0, 0.48, 0)
 sub.BackgroundTransparency = 1
-sub.Text = "ULTIMATE v150  •  loading"
+sub.Text = "ULTIMATE v160  •  loading"
 sub.TextColor3 = Color3.fromRGB(150, 150, 150)
 sub.Font = Enum.Font.Gotham
 sub.TextSize = 14
@@ -185,106 +184,39 @@ local function world_to_screen(pos)
 end
 
 -- ============================================================
--- AUTH & BASE SCANNER (Deep Scan)
+-- BASE & CHEST SCANNER (Simplified)
 -- ============================================================
 local base_cache = {}
 local chest_cache = {}
-local name_cache = {}
-
-local function update_name_async(uid, label_object)
-    local uid_str = tostring(uid)
-    if name_cache[uid_str] then
-        label_object.Text = "Auth: " .. name_cache[uid_str]
-        return
-    end
-    for _, p in ipairs(Players:GetPlayers()) do
-        if tostring(p.UserId) == uid_str then 
-            name_cache[uid_str] = p.Name
-            label_object.Text = "Auth: " .. p.Name
-            return 
-        end
-    end
-    task.spawn(function()
-        local ok, res = pcall(function()
-            local raw = game:HttpGet("https://users.roblox.com/v1/users/" .. uid_str)
-            return HttpService:JSONDecode(raw).displayName
-        end)
-        if ok and res then
-            name_cache[uid_str] = res
-            if label_object and label_object.Parent then label_object.Text = "Auth: " .. res end
-        else
-            if label_object and label_object.Parent then label_object.Text = "Auth: ID " .. uid_str end
-        end
-    end)
-end
 
 local function scan_cupboards()
     if not Config.BaseScan.Enabled then return end
+    local buildings = Workspace:FindFirstChild("Buildings")
+    if not buildings then return end
 
-    -- Сканируем ВЕСЬ Workspace, а не только Buildings
-    for _, obj in ipairs(Workspace:GetDescendants()) do
-        if obj.Name == "Cabinet" and obj:IsA("Part") then
-            
-            -- Ищем атрибуты в самом шкафу, в его родителе, и в дедушке
-            local targets = {obj, obj.Parent, obj.Parent and obj.Parent.Parent}
-            local auth_uids = {}
-            
-            for _, target in ipairs(targets) do
-                if target then
-                    local attrs = target:GetAttributes()
-                    for k, v in pairs(attrs) do
-                        -- Ищем Auth_ или OwnerId
-                        if (k:find("Auth_") or k == "OwnerId") and v then
-                            local uid = tostring(v)
-                            if k:find("Auth_") then uid = k:gsub("Auth_", "") end
-                            table.insert(auth_uids, uid)
-                        end
-                    end
-                end
-            end
-
-            -- Если нашли хоть какие-то ID
-            if #auth_uids > 0 and not base_cache[obj] then
-                -- Убираем дубли
-                local unique_uids = {}
-                for _, uid in ipairs(auth_uids) do unique_uids[uid] = true end
-                local final_uids = {}
-                for uid, _ in pairs(unique_uids) do table.insert(final_uids, uid) end
-                
+    for _, building in ipairs(buildings:GetChildren()) do
+        local attrs = building:GetAttributes()
+        if attrs["Type"] == "ToolCupboard" or attrs["HasTC"] then
+            local cabinet = building:FindFirstChild("Cabinet", true)
+            if cabinet and not base_cache[cabinet] then
                 local bb = Instance.new("BillboardGui")
-                bb.Adornee = obj
-                bb.Size = UDim2.new(0, 250, 0, 50)
-                bb.StudsOffset = Vector3.new(0, obj.Size.Y / 2 + 2, 0)
+                bb.Adornee = cabinet
+                bb.Size = UDim2.new(0, 200, 0, 30)
+                bb.StudsOffset = Vector3.new(0, cabinet.Size.Y / 2 + 2, 0)
                 bb.AlwaysOnTop = true
-                bb.Parent = obj
+                bb.Parent = cabinet
                 
                 local l1 = Instance.new("TextLabel")
-                l1.Size = UDim2.new(1, 0, 0.5, 0); l1.BackgroundTransparency = 1
-                l1.Text = "CABINET"; l1.TextColor3 = Config.BaseScan.CupboardColor
+                l1.Size = UDim2.new(1, 0, 1, 0); l1.BackgroundTransparency = 1
+                l1.Text = "TOOL CUPBOARD"; l1.TextColor3 = Config.BaseScan.CupboardColor
                 l1.Font = Enum.Font.GothamBold; l1.TextSize = 16; l1.Parent = bb
                 
-                local l3 = Instance.new("TextLabel")
-                l3.Size = UDim2.new(1, 0, 0.5, 0); l3.Position = UDim2.new(0, 0, 0.5, 0)
-                l3.BackgroundTransparency = 1; l3.Text = "Auth: Loading..."
-                l3.TextColor3 = Color3.fromRGB(255, 255, 255); l3.TextSize = 12; l3.Parent = bb
-                
-                base_cache[obj] = {gui = bb, auth_label = l3, uids = final_uids}
-                
-                task.spawn(function()
-                    local names = {}
-                    for _, uid in ipairs(final_uids) do
-                        update_name_async(uid, l3)
-                        table.insert(names, name_cache[uid] or ("ID:"..uid))
-                        task.wait(0.1)
-                    end
-                    if l3 and l3.Parent then
-                        l3.Text = "Auth: " .. (#names > 0 and table.concat(names, ", ") or "None")
-                    end
-                end)
+                base_cache[cabinet] = {gui = bb}
             end
         end
     end
 end
+
 local function scan_chests()
     if not Config.ChestScan.Enabled then return end
     local deployables = Workspace:FindFirstChild("Deployables")
@@ -785,10 +717,10 @@ Rayfield.CreateWindow = function(self, opts)
 end
 
 local Window = Rayfield:CreateWindow({
-    Name = "DEGRADE | ULTIMATE v150",
+    Name = "DEGRADE | ULTIMATE v160",
     LoadingTitle = "DEGRADE",
     LoadingSubtitle = "Ultimate Scanner",
-    ConfigurationSaving = { Enabled = false, FolderName = "DegradeBuild", FileName = "v150" },
+    ConfigurationSaving = { Enabled = false, FolderName = "DegradeBuild", FileName = "v160" },
     KeySystem = false,
 })
 
@@ -857,5 +789,5 @@ SettingsTab:CreateToggle({Name="Anti-AFK", CurrentValue=false, Flag="antiafk", C
 SettingsTab:CreateLabel("Panic Key: Right Shift")
 
 task.delay(10, function()
-    send_notif("DEGRADE", "Ultimate Build v150 Loaded.", Color3.fromRGB(0, 200, 255))
+    send_notif("DEGRADE", "Ultimate Build v160 Loaded.", Color3.fromRGB(0, 200, 255))
 end)
