@@ -1,4 +1,4 @@
--- language: Lua (Luau), file: degrade_ultimate_v135.lua, target: DEGRADE, executor: Solara / Delta / Fluxus
+-- language: Lua (Luau), file: degrade_ultimate_v150.lua, target: DEGRADE, executor: Solara / Delta / Fluxus
 -- CREATOR SMOKExR'S | DEGRADE Ultimate Build (by Lokeii)
 
 local Players = game:GetService("Players")
@@ -36,7 +36,7 @@ if not ok_rf or not Rayfield then
             t.Size = UDim2.new(1, -20, 1, -20)
             t.Position = UDim2.new(0, 10, 0, 10)
             t.BackgroundTransparency = 1
-            t.Text = "DEGRADE v135 — FALLBACK MODE"
+            t.Text = "DEGRADE v150 — FALLBACK MODE"
             t.TextColor3 = Color3.fromRGB(255, 50, 50)
             t.Font = Enum.Font.GothamBold
             t.TextSize = 14
@@ -83,7 +83,7 @@ local sub = Instance.new("TextLabel")
 sub.Size = UDim2.new(1, 0, 0, 20)
 sub.Position = UDim2.new(0, 0, 0.48, 0)
 sub.BackgroundTransparency = 1
-sub.Text = "ULTIMATE v135  •  loading"
+sub.Text = "ULTIMATE v150  •  loading"
 sub.TextColor3 = Color3.fromRGB(150, 150, 150)
 sub.Font = Enum.Font.Gotham
 sub.TextSize = 14
@@ -185,7 +185,7 @@ local function world_to_screen(pos)
 end
 
 -- ============================================================
--- BASE & CHEST SCANNER (Data-driven with API Names)
+-- AUTH & BASE SCANNER (Deep Scan)
 -- ============================================================
 local base_cache = {}
 local chest_cache = {}
@@ -206,20 +206,14 @@ local function update_name_async(uid, label_object)
     end
     task.spawn(function()
         local ok, res = pcall(function()
-            local url = "https://users.roblox.com/v1/users/" .. uid_str
-            local raw = game:HttpGet(url)
-            local data = game:GetService("HttpService"):JSONDecode(raw)
-            return data.displayName or data.name
+            local raw = game:HttpGet("https://users.roblox.com/v1/users/" .. uid_str)
+            return HttpService:JSONDecode(raw).displayName
         end)
         if ok and res then
             name_cache[uid_str] = res
-            if label_object and label_object.Parent then
-                label_object.Text = "Auth: " .. res
-            end
+            if label_object and label_object.Parent then label_object.Text = "Auth: " .. res end
         else
-            if label_object and label_object.Parent then
-                label_object.Text = "Auth: ID " .. uid_str
-            end
+            if label_object and label_object.Parent then label_object.Text = "Auth: ID " .. uid_str end
         end
     end)
 end
@@ -230,16 +224,45 @@ local function scan_cupboards()
     if not buildings then return end
 
     for _, building in ipairs(buildings:GetChildren()) do
-        local attrs = building:GetAttributes()
-        if attrs["Type"] == "ToolCupboard" or attrs["HasTC"] then
+        local b_attrs = building:GetAttributes()
+        
+        if b_attrs["Type"] == "ToolCupboard" or b_attrs["HasTC"] then
             local cabinet = building:FindFirstChild("Cabinet", true)
+            
             if cabinet and not base_cache[cabinet] then
                 local auth_uids = {}
-                for k, v in pairs(attrs) do
+                
+                -- 1. Атрибуты здания (Building)
+                for k, v in pairs(b_attrs) do
                     if k:find("Auth_") and v == true then
                         table.insert(auth_uids, k:gsub("Auth_", ""))
                     end
                 end
+                
+                -- 2. Атрибуты шкафа (Cabinet)
+                local c_attrs = cabinet:GetAttributes()
+                for k, v in pairs(c_attrs) do
+                    if k:find("Auth_") and v == true then
+                        table.insert(auth_uids, k:gsub("Auth_", ""))
+                    end
+                end
+                
+                -- 3. Дочерние элементы шкафа (StringValue / ObjectValue)
+                for _, child in ipairs(cabinet:GetDescendants()) do
+                    if child.Name:find("Auth") then
+                        if child:IsA("ObjectValue") and child.Value then
+                            table.insert(auth_uids, tostring(child.Value.UserId))
+                        elseif child:IsA("StringValue") then
+                            table.insert(auth_uids, child.Value)
+                        end
+                    end
+                end
+
+                local unique_uids = {}
+                for _, uid in ipairs(auth_uids) do unique_uids[uid] = true end
+                local final_uids = {}
+                for uid, _ in pairs(unique_uids) do table.insert(final_uids, uid) end
+
                 local bb = Instance.new("BillboardGui")
                 bb.Adornee = cabinet
                 bb.Size = UDim2.new(0, 250, 0, 50)
@@ -257,14 +280,14 @@ local function scan_cupboards()
                 l3.BackgroundTransparency = 1; l3.Text = "Auth: Loading..."
                 l3.TextColor3 = Color3.fromRGB(255, 255, 255); l3.TextSize = 12; l3.Parent = bb
                 
-                base_cache[cabinet] = {gui = bb, auth_label = l3, uids = auth_uids}
+                base_cache[cabinet] = {gui = bb, auth_label = l3, uids = final_uids}
                 
                 task.spawn(function()
                     local names = {}
-                    for _, uid in ipairs(auth_uids) do
+                    for _, uid in ipairs(final_uids) do
                         update_name_async(uid, l3)
                         table.insert(names, name_cache[uid] or ("ID:"..uid))
-                        task.wait(0.2)
+                        task.wait(0.1)
                     end
                     if l3 and l3.Parent then
                         l3.Text = "Auth: " .. (#names > 0 and table.concat(names, ", ") or "None")
@@ -775,10 +798,10 @@ Rayfield.CreateWindow = function(self, opts)
 end
 
 local Window = Rayfield:CreateWindow({
-    Name = "DEGRADE | ULTIMATE v135",
+    Name = "DEGRADE | ULTIMATE v150",
     LoadingTitle = "DEGRADE",
     LoadingSubtitle = "Ultimate Scanner",
-    ConfigurationSaving = { Enabled = false, FolderName = "DegradeBuild", FileName = "v135" },
+    ConfigurationSaving = { Enabled = false, FolderName = "DegradeBuild", FileName = "v150" },
     KeySystem = false,
 })
 
@@ -847,5 +870,5 @@ SettingsTab:CreateToggle({Name="Anti-AFK", CurrentValue=false, Flag="antiafk", C
 SettingsTab:CreateLabel("Panic Key: Right Shift")
 
 task.delay(10, function()
-    send_notif("DEGRADE", "Ultimate Build v135 Loaded.", Color3.fromRGB(0, 200, 255))
+    send_notif("DEGRADE", "Ultimate Build v150 Loaded.", Color3.fromRGB(0, 200, 255))
 end)
