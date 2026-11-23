@@ -220,55 +220,43 @@ end
 
 local function scan_cupboards()
     if not Config.BaseScan.Enabled then return end
-    local buildings = Workspace:FindFirstChild("Buildings")
-    if not buildings then return end
 
-    for _, building in ipairs(buildings:GetChildren()) do
-        local b_attrs = building:GetAttributes()
-        
-        if b_attrs["Type"] == "ToolCupboard" or b_attrs["HasTC"] then
-            local cabinet = building:FindFirstChild("Cabinet", true)
+    -- Сканируем ВЕСЬ Workspace, а не только Buildings
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if obj.Name == "Cabinet" and obj:IsA("Part") then
             
-            if cabinet and not base_cache[cabinet] then
-                local auth_uids = {}
-                
-                -- 1. Атрибуты здания (Building)
-                for k, v in pairs(b_attrs) do
-                    if k:find("Auth_") and v == true then
-                        table.insert(auth_uids, k:gsub("Auth_", ""))
-                    end
-                end
-                
-                -- 2. Атрибуты шкафа (Cabinet)
-                local c_attrs = cabinet:GetAttributes()
-                for k, v in pairs(c_attrs) do
-                    if k:find("Auth_") and v == true then
-                        table.insert(auth_uids, k:gsub("Auth_", ""))
-                    end
-                end
-                
-                -- 3. Дочерние элементы шкафа (StringValue / ObjectValue)
-                for _, child in ipairs(cabinet:GetDescendants()) do
-                    if child.Name:find("Auth") then
-                        if child:IsA("ObjectValue") and child.Value then
-                            table.insert(auth_uids, tostring(child.Value.UserId))
-                        elseif child:IsA("StringValue") then
-                            table.insert(auth_uids, child.Value)
+            -- Ищем атрибуты в самом шкафу, в его родителе, и в дедушке
+            local targets = {obj, obj.Parent, obj.Parent and obj.Parent.Parent}
+            local auth_uids = {}
+            
+            for _, target in ipairs(targets) do
+                if target then
+                    local attrs = target:GetAttributes()
+                    for k, v in pairs(attrs) do
+                        -- Ищем Auth_ или OwnerId
+                        if (k:find("Auth_") or k == "OwnerId") and v then
+                            local uid = tostring(v)
+                            if k:find("Auth_") then uid = k:gsub("Auth_", "") end
+                            table.insert(auth_uids, uid)
                         end
                     end
                 end
+            end
 
+            -- Если нашли хоть какие-то ID
+            if #auth_uids > 0 and not base_cache[obj] then
+                -- Убираем дубли
                 local unique_uids = {}
                 for _, uid in ipairs(auth_uids) do unique_uids[uid] = true end
                 local final_uids = {}
                 for uid, _ in pairs(unique_uids) do table.insert(final_uids, uid) end
-
+                
                 local bb = Instance.new("BillboardGui")
-                bb.Adornee = cabinet
+                bb.Adornee = obj
                 bb.Size = UDim2.new(0, 250, 0, 50)
-                bb.StudsOffset = Vector3.new(0, cabinet.Size.Y / 2 + 2, 0)
+                bb.StudsOffset = Vector3.new(0, obj.Size.Y / 2 + 2, 0)
                 bb.AlwaysOnTop = true
-                bb.Parent = cabinet
+                bb.Parent = obj
                 
                 local l1 = Instance.new("TextLabel")
                 l1.Size = UDim2.new(1, 0, 0.5, 0); l1.BackgroundTransparency = 1
@@ -280,7 +268,7 @@ local function scan_cupboards()
                 l3.BackgroundTransparency = 1; l3.Text = "Auth: Loading..."
                 l3.TextColor3 = Color3.fromRGB(255, 255, 255); l3.TextSize = 12; l3.Parent = bb
                 
-                base_cache[cabinet] = {gui = bb, auth_label = l3, uids = final_uids}
+                base_cache[obj] = {gui = bb, auth_label = l3, uids = final_uids}
                 
                 task.spawn(function()
                     local names = {}
@@ -297,7 +285,6 @@ local function scan_cupboards()
         end
     end
 end
-
 local function scan_chests()
     if not Config.ChestScan.Enabled then return end
     local deployables = Workspace:FindFirstChild("Deployables")
