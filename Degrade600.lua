@@ -201,47 +201,39 @@ end
 
 local function scan_cupboards()
     if not Config.BaseScan.Enabled then return end
-    for _, obj in ipairs(Workspace:GetDescendants()) do
-        if obj.Name == "Cabinet" and obj:IsA("Part") then
+    
+    -- Ищем внутри папки Buildings
+    local buildings = Workspace:FindFirstChild("Buildings")
+    if not buildings then return end
+
+    for _, building in ipairs(buildings:GetChildren()) do
+        -- Ищем атрибуты на самой модели здания
+        local attrs = building:GetAttributes()
+        
+        -- Если есть владелец или это шкаф
+        if attrs["OwnerId"] or attrs["Type"] == "ToolCupboard" or attrs["HasTC"] then
+            local cabinet = building:FindFirstChild("Cabinet", true)
             
-            -- Ищем данные в родителе (Building) или в самом объекте
-            local parent = obj.Parent
-            local owner_id = nil
-            local auth_list = {}
-            
-            -- Проверяем атрибуты самого Cabinet
-            local attrs = obj:GetAttributes()
-            if attrs["OwnerId"] then owner_id = attrs["OwnerId"] end
-            
-            -- Если нет в Cabinet, ищем в родителе (Building)
-            if not owner_id and parent then
-                local p_attrs = parent:GetAttributes()
-                if p_attrs["OwnerId"] then owner_id = p_attrs["OwnerId"] end
+            if cabinet and not base_cache[cabinet] then
+                local owner = get_owner_name(attrs["OwnerId"])
+                local auth_list = {}
                 
-                -- Собираем Auth из родителя
-                for k, v in pairs(p_attrs) do
+                for k, v in pairs(attrs) do
                     if k:find("Auth_") and v == true then
-                        local uid = k:gsub("Auth_", "")
-                        table.insert(auth_list, get_owner_name(uid))
+                        table.insert(auth_list, get_owner_name(k:gsub("Auth_", "")))
                     end
                 end
-            end
-            
-            -- Если нашли владельца, рисуем
-            if owner_id and not base_cache[obj] then
-                local owner = get_owner_name(owner_id)
-                local auth_str = #auth_list > 0 and table.concat(auth_list, ", ") or "None"
                 
                 local bb = Instance.new("BillboardGui")
-                bb.Adornee = obj
+                bb.Adornee = cabinet
                 bb.Size = UDim2.new(0, 250, 0, 60)
-                bb.StudsOffset = Vector3.new(0, obj.Size.Y / 2 + 2, 0)
+                bb.StudsOffset = Vector3.new(0, cabinet.Size.Y / 2 + 2, 0)
                 bb.AlwaysOnTop = true
-                bb.Parent = obj
+                bb.Parent = cabinet
                 
                 local l1 = Instance.new("TextLabel")
                 l1.Size = UDim2.new(1, 0, 0.4, 0); l1.BackgroundTransparency = 1
-                l1.Text = "CUPBOARD"; l1.TextColor3 = Config.BaseScan.CupboardColor
+                l1.Text = "CUPBOARD"; l1.TextColor3 = Color3.fromRGB(0, 255, 0)
                 l1.Font = Enum.Font.GothamBold; l1.TextSize = 16; l1.Parent = bb
                 
                 local l2 = Instance.new("TextLabel")
@@ -251,15 +243,14 @@ local function scan_cupboards()
                 
                 local l3 = Instance.new("TextLabel")
                 l3.Size = UDim2.new(1, 0, 0.3, 0); l3.Position = UDim2.new(0, 0, 0.7, 0)
-                l3.BackgroundTransparency = 1; l3.Text = "Auth: " .. auth_str
+                l3.BackgroundTransparency = 1; l3.Text = "Auth: " .. (#auth_list > 0 and table.concat(auth_list, ", ") or "None")
                 l3.TextColor3 = Color3.fromRGB(200, 200, 200); l3.TextSize = 11; l3.Parent = bb
                 
-                base_cache[obj] = {gui = bb}
+                base_cache[cabinet] = {gui = bb}
             end
         end
     end
 end
-
 local function scan_chests()
     if not Config.ChestScan.Enabled then return end
     local deployables = Workspace:FindFirstChild("Deployables")
