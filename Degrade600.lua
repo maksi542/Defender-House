@@ -1,6 +1,6 @@
--- language: Lua (Luau), file: degrade_ultimate_v240.lua, target: DEGRADE, executor: Solara / Delta / Fluxus
--- CREATOR SMOKExR'S | DEGRADE Ultimate Build v240 (by Lokeii)
--- FIXED: Safe TP (Server-Sync CFrame), Removed broken Raycast Bypass
+-- language: Lua (Luau), file: degrade_ultimate_v250.lua, target: DEGRADE, executor: Solara / Delta / Fluxus
+-- CREATOR SMOKExR'S | DEGRADE Ultimate Build v250 (by Lokeii)
+-- FIXED: Safe TP (Ragdoll State + CFrame Snap), Removed Raycast Bypass
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -37,7 +37,7 @@ if not ok_rf or not Rayfield then
             t.Size = UDim2.new(1, -20, 1, -20)
             t.Position = UDim2.new(0, 10, 0, 10)
             t.BackgroundTransparency = 1
-            t.Text = "DEGRADE v240 — FALLBACK MODE"
+            t.Text = "DEGRADE v250 — FALLBACK MODE"
             t.TextColor3 = Color3.fromRGB(255, 50, 50)
             t.Font = Enum.Font.GothamBold
             t.TextSize = 14
@@ -84,7 +84,7 @@ local sub = Instance.new("TextLabel")
 sub.Size = UDim2.new(1, 0, 0, 20)
 sub.Position = UDim2.new(0, 0, 0.48, 0)
 sub.BackgroundTransparency = 1
-sub.Text = "ULTIMATE v240  •  loading"
+sub.Text = "ULTIMATE v250  •  loading"
 sub.TextColor3 = Color3.fromRGB(150, 150, 150)
 sub.Font = Enum.Font.Gotham
 sub.TextSize = 14
@@ -187,7 +187,7 @@ local function world_to_screen(pos)
 end
 
 -- ============================================================
--- MOVEMENT (Noclip & Safe TP v6 - Server Sync)
+-- MOVEMENT (Noclip & Safe TP v7 - Ragdoll Snap)
 -- ============================================================
 local noclip_conn = nil
 local function toggle_noclip(state)
@@ -214,6 +214,7 @@ local function safe_tp()
     local char, hum, hrp = get_character()
     if not hrp or not hum then return end
     
+    -- 1. Рейкаст вперед
     local rayParams = RaycastParams.new()
     rayParams.FilterDescendantsInstances = {char}
     rayParams.FilterType = Enum.RaycastFilterType.Exclude
@@ -223,6 +224,7 @@ local function safe_tp()
     local hit = Workspace:Raycast(rayOrigin, rayDirection, rayParams)
     if not hit then return end
     
+    -- 2. Точка за стеной + проверка пола
     local targetPos = hit.Position + (Camera.CFrame.LookVector * 5) + Vector3.new(0, 3, 0)
     local floorHit = Workspace:Raycast(targetPos + Vector3.new(0, 5, 0), Vector3.new(0, -20, 0), rayParams)
     if not floorHit then return end
@@ -230,7 +232,7 @@ local function safe_tp()
     targetPos = floorHit.Position + Vector3.new(0, 3.5, 0)
     is_tping = true
 
-    -- Сохраняем старые коллизии
+    -- 3. Сохраняем коллизии
     local old_collides = {}
     for _, part in ipairs(char:GetDescendants()) do
         if part:IsA("BasePart") then
@@ -239,22 +241,22 @@ local function safe_tp()
         end
     end
     
+    -- 4. Заставляем Humanoid думать, что мы в состоянии физики (Ragdoll)
+    local old_state = hum:GetState()
+    hum:ChangeState(Enum.HumanoidStateType.Physics)
+    
+    -- 5. Анкорим и переносим
     local old_anchor = hrp.Anchored
-    
-    -- 1. Анкорим и забираем сетевую собственность
     hrp.Anchored = true
-    pcall(function() hrp:SetNetworkOwner(LocalPlayer) end)
-    
-    -- 2. Резкий CFrame Snap
     hrp.CFrame = CFrame.new(targetPos) * Camera.CFrame.Rotation
     
-    -- 3. Ждем 2 кадра сервера (0.05 - 0.1 сек)
-    task.wait(0.1)
+    -- 6. Ждем (сервер должен синхронизировать позицию в состоянии Physics)
+    task.wait(0.15)
     
-    -- 4. Отпускаем
+    -- 7. Возвращаем всё обратно
     if char and char.Parent and hrp then
         hrp.Anchored = old_anchor
-        pcall(function() hrp:SetNetworkOwner(nil) end)
+        hum:ChangeState(old_state)
         for part, can_col in pairs(old_collides) do
             if part and part.Parent then
                 part.CanCollide = can_col
@@ -933,10 +935,10 @@ Rayfield.CreateWindow = function(self, opts)
 end
 
 local Window = Rayfield:CreateWindow({
-    Name = "DEGRADE | ULTIMATE v240",
+    Name = "DEGRADE | ULTIMATE v250",
     LoadingTitle = "DEGRADE",
     LoadingSubtitle = "Ultimate Scanner",
-    ConfigurationSaving = { Enabled = false, FolderName = "DegradeBuild", FileName = "v240" },
+    ConfigurationSaving = { Enabled = false, FolderName = "DegradeBuild", FileName = "v250" },
     KeySystem = false,
 })
 
@@ -1011,7 +1013,7 @@ SettingsTab:CreateToggle({Name="Anti-AFK", CurrentValue=false, Flag="antiafk", C
 SettingsTab:CreateLabel("Panic Key: Right Shift")
 
 task.delay(10, function()
-    send_notif("DEGRADE", "Ultimate Build v240 Loaded.", Color3.fromRGB(0, 200, 255))
+    send_notif("DEGRADE", "Ultimate Build v250 Loaded.", Color3.fromRGB(0, 200, 255))
 end)
 
-print("[DEGRADE] v240 loaded.")
+print("[DEGRADE] v250 loaded.")
