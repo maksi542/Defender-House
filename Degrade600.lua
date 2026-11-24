@@ -1,6 +1,6 @@
--- language: Lua (Luau), file: degrade_ultimate_v210.lua, target: DEGRADE, executor: Solara / Delta / Fluxus
--- CREATOR SMOKExR'S | DEGRADE Ultimate Build v210 (by Lokeii)
--- ADDED: Raycast Hook (Anti-Bypass), Velocity Glide
+-- language: Lua (Luau), file: degrade_ultimate_v230.lua, target: DEGRADE, executor: Solara / Delta / Fluxus
+-- CREATOR SMOKExR'S | DEGRADE Ultimate Build v230 (by Lokeii)
+-- FIXED: Safe TP (Anchor Snap), Raycast Bypass (pcall), UI Stability
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -37,7 +37,7 @@ if not ok_rf or not Rayfield then
             t.Size = UDim2.new(1, -20, 1, -20)
             t.Position = UDim2.new(0, 10, 0, 10)
             t.BackgroundTransparency = 1
-            t.Text = "DEGRADE v210 — FALLBACK MODE"
+            t.Text = "DEGRADE v230 — FALLBACK MODE"
             t.TextColor3 = Color3.fromRGB(255, 50, 50)
             t.Font = Enum.Font.GothamBold
             t.TextSize = 14
@@ -84,7 +84,7 @@ local sub = Instance.new("TextLabel")
 sub.Size = UDim2.new(1, 0, 0, 20)
 sub.Position = UDim2.new(0, 0, 0.48, 0)
 sub.BackgroundTransparency = 1
-sub.Text = "ULTIMATE v210  •  loading"
+sub.Text = "ULTIMATE v230  •  loading"
 sub.TextColor3 = Color3.fromRGB(150, 150, 150)
 sub.Font = Enum.Font.Gotham
 sub.TextSize = 14
@@ -134,7 +134,7 @@ end)
 local ThemeColor = Color3.fromRGB(255, 50, 50)
 local IsPanic = false
 local bypass_active = false
-local hook_restore = nil
+local original_raycast = nil
 
 local Config = {
     Aimbot = { Enabled = false, FOV = 120, Smoothness = 0.08, WallCheck = true, TeamCheck = true, AimPart = "Head", AlwaysOn = false },
@@ -189,35 +189,22 @@ local function world_to_screen(pos)
 end
 
 -- ============================================================
--- RAYCAST HOOK (Anti-Bypass)
+-- RAYCAST BYPASS (Safe Hook)
 -- ============================================================
-local original_raycast = nil
-local original_raycastbatch = nil
-
 local function toggle_bypass(state)
     Config.Movement.Bypass = state
+    local has_hook = (hookfunction ~= nil)
+    local has_hookmeta = (hookmetamethod ~= nil)
+    
+    if not has_hook and not has_hookmeta then
+        send_notif("BYPASS", "Executor does not support hooks.", Color3.fromRGB(255, 0, 0))
+        return
+    end
+    
     if state and not bypass_active then
-        if hookfunction and Workspace.Raycast then
-            bypass_active = true
-            original_raycast = hookfunction(Workspace.Raycast, function(origin, direction, params)
-                -- Если луч от античита (нет игнора для LocalPlayer.Character) - возвращаем nil
-                local is_ours = false
-                if params and params.FilterDescendantsInstances then
-                    for _, obj in ipairs(params.FilterDescendantsInstances) do
-                        if obj == LocalPlayer.Character then
-                            is_ours = true
-                            break
-                        end
-                    end
-                end
-                if not is_ours then
-                    return nil -- Ложный raycast для античита
-                end
-                return original_raycast(origin, direction, params)
-            end)
-            
-            if hookfunction and Workspace.RaycastBatch then
-                original_raycastbatch = hookfunction(Workspace.RaycastBatch, function(origin, directions, params)
+        local success, err = pcall(function()
+            if has_hook then
+                original_raycast = hookfunction(Workspace.Raycast, function(origin, direction, params)
                     local is_ours = false
                     if params and params.FilterDescendantsInstances then
                         for _, obj in ipairs(params.FilterDescendantsInstances) do
@@ -227,30 +214,54 @@ local function toggle_bypass(state)
                             end
                         end
                     end
-                    if not is_ours then return {} end
-                    return original_raycastbatch(origin, directions, params)
+                    if not is_ours then return nil end
+                    return original_raycast(origin, direction, params)
                 end)
+            elseif has_hookmeta then
+                local old
+                old = hookmetamethod(game, "__namecall", function(self, ...)
+                    local method = getnamecallmethod()
+                    if method == "Raycast" and self == Workspace then
+                        local args = {...}
+                        local params = args[3]
+                        local is_ours = false
+                        if params and params.FilterDescendantsInstances then
+                            for _, obj in ipairs(params.FilterDescendantsInstances) do
+                                if obj == LocalPlayer.Character then
+                                    is_ours = true
+                                    break
+                                end
+                            end
+                        end
+                        if not is_ours then return nil end
+                    end
+                    return old(self, ...)
+                end)
+                original_raycast = old
             end
+        end)
+        
+        if success then
+            bypass_active = true
             send_notif("BYPASS", "Raycast Hook Active", Color3.fromRGB(0, 255, 0))
         else
-            send_notif("BYPASS", "hookfunction not supported", Color3.fromRGB(255, 0, 0))
+            warn("[DEGRADE] Bypass failed: " .. tostring(err))
+            send_notif("BYPASS", "Hook failed. See console.", Color3.fromRGB(255, 0, 0))
         end
     elseif not state and bypass_active then
-        if original_raycast and Workspace.Raycast then
-            hookfunction(Workspace.Raycast, original_raycast)
-            original_raycast = nil
-        end
-        if original_raycastbatch and Workspace.RaycastBatch then
-            hookfunction(Workspace.RaycastBatch, original_raycastbatch)
-            original_raycastbatch = nil
-        end
+        pcall(function()
+            if original_raycast and has_hook then
+                hookfunction(Workspace.Raycast, original_raycast)
+            end
+        end)
+        original_raycast = nil
         bypass_active = false
         send_notif("BYPASS", "Disabled", Color3.fromRGB(255, 0, 0))
     end
 end
 
 -- ============================================================
--- MOVEMENT (Noclip & Velocity Glide)
+-- MOVEMENT (Noclip & Anchor Snap TP)
 -- ============================================================
 local noclip_conn = nil
 local function toggle_noclip(state)
@@ -277,22 +288,25 @@ local function safe_tp()
     local char, hum, hrp = get_character()
     if not hrp or not hum then return end
     
+    -- 1. Рейкаст вперед
     local rayParams = RaycastParams.new()
     rayParams.FilterDescendantsInstances = {char}
     rayParams.FilterType = Enum.RaycastFilterType.Exclude
     
     local rayOrigin = Camera.CFrame.Position
-    local rayDirection = Camera.CFrame.LookVector * 25
+    local rayDirection = Camera.CFrame.LookVector * 30
     local hit = Workspace:Raycast(rayOrigin, rayDirection, rayParams)
     if not hit then return end
     
-    local targetPos = hit.Position + (Camera.CFrame.LookVector * 4) + Vector3.new(0, 3, 0)
+    -- 2. Точка за стеной + проверка пола
+    local targetPos = hit.Position + (Camera.CFrame.LookVector * 5) + Vector3.new(0, 2, 0)
     local floorHit = Workspace:Raycast(targetPos + Vector3.new(0, 5, 0), Vector3.new(0, -20, 0), rayParams)
     if not floorHit then return end
     
     targetPos = floorHit.Position + Vector3.new(0, 3.5, 0)
     is_tping = true
 
+    -- 3. Сохраняем старое состояние
     local old_collides = {}
     for _, part in ipairs(char:GetDescendants()) do
         if part:IsA("BasePart") then
@@ -300,32 +314,25 @@ local function safe_tp()
             part.CanCollide = false
         end
     end
-
-    local direction = (targetPos - hrp.Position).Unit
-    local distance = (targetPos - hrp.Position).Magnitude
-    local speed = 200
-    local old_ws = hum.WalkSpeed
-    hum.WalkSpeed = speed
     
-    hrp.AssemblyLinearVelocity = direction * speed
-    hum.PlatformStand = true
+    local old_anchor = hrp.Anchored
     
-    local start_time = tick()
-    while tick() - start_time < (distance / speed) + 0.5 do
-        task.wait(0.05)
-        if not hrp or not hrp.Parent then break end
-        if (hrp.Position - targetPos).Magnitude < 3 then break end
-    end
+    -- 4. АНКОРИМ (Останавливаем физику)
+    hrp.Anchored = true
     
-    if hrp and hrp.Parent then
-        hrp.AssemblyLinearVelocity = Vector3.zero
-        hum.PlatformStand = false
-        hum.WalkSpeed = old_ws
-    end
+    -- 5. Резкий CFrame Snap (Телепорт)
+    hrp.CFrame = CFrame.new(targetPos) * Camera.CFrame.Rotation
     
-    for part, can_col in pairs(old_collides) do
-        if part and part.Parent then
-            part.CanCollide = can_col
+    -- 6. Ждем 2 кадра (0.1 сек) для синхронизации сервера
+    task.wait(0.1)
+    
+    -- 7. Отпускаем якорь и возвращаем коллизии
+    if char and char.Parent and hrp then
+        hrp.Anchored = old_anchor
+        for part, can_col in pairs(old_collides) do
+            if part and part.Parent then
+                part.CanCollide = can_col
+            end
         end
     end
     is_tping = false
@@ -1001,10 +1008,10 @@ Rayfield.CreateWindow = function(self, opts)
 end
 
 local Window = Rayfield:CreateWindow({
-    Name = "DEGRADE | ULTIMATE v210",
+    Name = "DEGRADE | ULTIMATE v230",
     LoadingTitle = "DEGRADE",
     LoadingSubtitle = "Ultimate Scanner",
-    ConfigurationSaving = { Enabled = false, FolderName = "DegradeBuild", FileName = "v210" },
+    ConfigurationSaving = { Enabled = false, FolderName = "DegradeBuild", FileName = "v230" },
     KeySystem = false,
 })
 
@@ -1080,10 +1087,7 @@ SettingsTab:CreateToggle({Name="Anti-AFK", CurrentValue=false, Flag="antiafk", C
 SettingsTab:CreateLabel("Panic Key: Right Shift")
 
 task.delay(10, function()
-    send_notif("DEGRADE", "Ultimate Build v210 Loaded.", Color3.fromRGB(0, 200, 255))
-    if not hookfunction then
-        send_notif("WARNING", "hookfunction not supported. Bypass disabled.", Color3.fromRGB(255, 200, 0))
-    end
+    send_notif("DEGRADE", "Ultimate Build v230 Loaded.", Color3.fromRGB(0, 200, 255))
 end)
 
-print("[DEGRADE] v210 loaded.")
+print("[DEGRADE] v230 loaded.")
