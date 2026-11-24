@@ -1,11 +1,13 @@
--- language: Lua (Luau), file: degrade_ultimate_v195.lua, target: DEGRADE, executor: Solara / Delta / Fluxus
--- CREATOR SMOKExR'S | DEGRADE Ultimate Build (by Lokeii)
+-- language: Lua (Luau), file: degrade_ultimate_v200.lua, target: DEGRADE, executor: Solara / Delta / Fluxus
+-- CREATOR SMOKExR'S | DEGRADE Ultimate Build v200 (by Lokeii)
+-- FIXED: Threads, X-Ray, FPSBoost, Safe TP (Anchor Glitch)
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 local TweenService = game:GetService("TweenService")
+local Lighting = game:GetService("Lighting")
 local HttpService = game:GetService("HttpService")
 local Camera = Workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
@@ -35,7 +37,7 @@ if not ok_rf or not Rayfield then
             t.Size = UDim2.new(1, -20, 1, -20)
             t.Position = UDim2.new(0, 10, 0, 10)
             t.BackgroundTransparency = 1
-            t.Text = "DEGRADE v195 — FALLBACK MODE"
+            t.Text = "DEGRADE v200 — FALLBACK MODE"
             t.TextColor3 = Color3.fromRGB(255, 50, 50)
             t.Font = Enum.Font.GothamBold
             t.TextSize = 14
@@ -82,7 +84,7 @@ local sub = Instance.new("TextLabel")
 sub.Size = UDim2.new(1, 0, 0, 20)
 sub.Position = UDim2.new(0, 0, 0.48, 0)
 sub.BackgroundTransparency = 1
-sub.Text = "ULTIMATE v195  •  loading"
+sub.Text = "ULTIMATE v200  •  loading"
 sub.TextColor3 = Color3.fromRGB(150, 150, 150)
 sub.Font = Enum.Font.Gotham
 sub.TextSize = 14
@@ -185,7 +187,7 @@ local function world_to_screen(pos)
 end
 
 -- ============================================================
--- MOVEMENT (Safe Teleport)
+-- MOVEMENT (Noclip & Safe TP with Anchor Glitch)
 -- ============================================================
 local noclip_conn = nil
 local function toggle_noclip(state)
@@ -206,23 +208,52 @@ local function toggle_noclip(state)
     end
 end
 
+local is_tping = false
 local function safe_tp()
+    if is_tping then return end
     local char, hum, hrp = get_character()
-    if not hrp then return end
+    if not hrp or not hum then return end
     
-    local rayOrigin = Camera.CFrame.Position
-    local rayDirection = Camera.CFrame.LookVector * 20
-    
-    -- Ищем, куда можно встать за стеной
     local rayParams = RaycastParams.new()
-    rayParams.FilterDescendantsInstances = {LocalPlayer.Character}
+    rayParams.FilterDescendantsInstances = {char}
     rayParams.FilterType = Enum.RaycastFilterType.Exclude
     
+    local rayOrigin = Camera.CFrame.Position
+    local rayDirection = Camera.CFrame.LookVector * 25
     local hit = Workspace:Raycast(rayOrigin, rayDirection, rayParams)
-    if hit then
-        local targetPos = hit.Position + (Camera.CFrame.LookVector * 2) + Vector3.new(0, 3, 0)
-        hrp.CFrame = CFrame.new(targetPos) * Camera.CFrame.Rotation
+    if not hit then return end
+    
+    local targetPos = hit.Position + (Camera.CFrame.LookVector * 4) + Vector3.new(0, 3, 0)
+    local floorHit = Workspace:Raycast(targetPos + Vector3.new(0, 5, 0), Vector3.new(0, -20, 0), rayParams)
+    if not floorHit then return end
+    
+    targetPos = floorHit.Position + Vector3.new(0, 3.5, 0)
+    is_tping = true
+
+    local old_collides = {}
+    for _, part in ipairs(char:GetDescendants()) do
+        if part:IsA("BasePart") then
+            old_collides[part] = part.CanCollide
+            part.CanCollide = false
+        end
     end
+    
+    local old_anchor = hrp.Anchored
+    hrp.Anchored = true
+    
+    hrp.CFrame = CFrame.new(targetPos) * Camera.CFrame.Rotation
+    
+    task.wait(0.1)
+    
+    if char and char.Parent and hrp then
+        hrp.Anchored = old_anchor
+        for part, can_col in pairs(old_collides) do
+            if part and part.Parent then
+                part.CanCollide = can_col
+            end
+        end
+    end
+    is_tping = false
 end
 
 UserInputService.InputBegan:Connect(function(input, gp)
@@ -256,7 +287,7 @@ local function update_name_async(uid, label_object)
         local ok, res = pcall(function()
             local url = "https://users.roblox.com/v1/users/" .. uid_str
             local raw = game:HttpGet(url)
-            local data = game:GetService("HttpService"):JSONDecode(raw)
+            local data = HttpService:JSONDecode(raw)
             return data.displayName or data.name
         end)
         if ok and res then
@@ -293,7 +324,7 @@ local function scan_cupboards()
                 local bb = Instance.new("BillboardGui")
                 bb.Adornee = cabinet
                 bb.Size = UDim2.new(0, 250, 0, 50)
-                bb.StudsOffset = Vector3.new(0, cabinet.Size.Y / 2 + 2, 0)
+                bb.StudsOffsetWorldSpace = cabinet.CFrame.UpVector * (cabinet.Size.Y / 2 + 2)
                 bb.AlwaysOnTop = true
                 bb.Parent = cabinet
                 
@@ -313,11 +344,14 @@ local function scan_cupboards()
                     local names = {}
                     for _, uid in ipairs(auth_uids) do
                         update_name_async(uid, l3)
-                        table.insert(names, name_cache[uid] or ("ID:"..uid))
-                        task.wait(0.1)
+                        task.wait(0.05)
                     end
                     if l3 and l3.Parent then
-                        l3.Text = "Auth: " .. (#names > 0 and table.concat(names, ", ") or "None")
+                        local parts = {}
+                        for uid, _ in pairs(auth_uids) do
+                            table.insert(parts, name_cache[tostring(uid)] or ("ID:"..tostring(uid)))
+                        end
+                        l3.Text = "Auth: " .. (#parts > 0 and table.concat(parts, ", ") or "None")
                     end
                 end)
             end
@@ -337,7 +371,7 @@ local function scan_chests()
                     local bb = Instance.new("BillboardGui")
                     bb.Adornee = primary
                     bb.Size = UDim2.new(0, 150, 0, 40)
-                    bb.StudsOffset = Vector3.new(0, primary.Size.Y / 2 + 1, 0)
+                    bb.StudsOffsetWorldSpace = primary.CFrame.UpVector * (primary.Size.Y / 2 + 1)
                     bb.AlwaysOnTop = true
                     bb.Parent = primary
                     
@@ -358,7 +392,6 @@ local function scan_chests()
     end
 end
 
--- X-Ray
 local xray_parts = {}
 local function apply_xray(state)
     local buildings = Workspace:FindFirstChild("Buildings")
@@ -372,6 +405,9 @@ local function apply_xray(state)
                 part.LocalTransparencyModifier = 0.8
             end
         end
+        for part in pairs(xray_parts) do
+            if not part.Parent then xray_parts[part] = nil end
+        end
     else
         for part, trans in pairs(xray_parts) do
             if part and part.Parent then
@@ -382,6 +418,60 @@ local function apply_xray(state)
     end
 end
 
+-- ============================================================
+-- ORE SCANNER
+-- ============================================================
+local ore_cache = {}
+local function scan_ores()
+    if not Config.OreESP.Enabled then return end
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if obj.Name == "Boulder" and obj:IsA("Model") then
+            local rock = obj:FindFirstChild("Rock")
+            if rock and rock:IsA("MeshPart") and not ore_cache[obj] then
+                local bb = Instance.new("BillboardGui")
+                bb.Adornee = rock
+                bb.Size = UDim2.new(0, 100, 0, 30)
+                bb.StudsOffsetWorldSpace = rock.CFrame.UpVector * (rock.Size.Y / 2 + 1)
+                bb.AlwaysOnTop = true
+                bb.Parent = rock
+                
+                local label = Instance.new("TextLabel")
+                label.Size = UDim2.new(1, 0, 1, 0)
+                label.BackgroundTransparency = 1
+                label.Text = "ROCK"
+                label.TextColor3 = Config.OreESP.Color
+                label.Font = Enum.Font.GothamBold
+                label.TextSize = 14
+                label.Parent = bb
+                
+                ore_cache[obj] = {gui = bb, rock = rock}
+            end
+        end
+    end
+end
+task.spawn(function()
+    while task.wait(2) do
+        if IsPanic or not Config.OreESP.Enabled then continue end
+        scan_ores()
+        for obj, data in pairs(ore_cache) do
+            if not obj.Parent or not data.rock.Parent then
+                data.gui:Destroy()
+                ore_cache[obj] = nil
+            else
+                local dist = (data.rock.Position - Camera.CFrame.Position).Magnitude
+                data.gui.Enabled = dist <= Config.OreESP.MaxDistance
+            end
+        end
+    end
+end)
+local function clear_ores()
+    for obj, data in pairs(ore_cache) do if data.gui then data.gui:Destroy() end end
+    ore_cache = {}
+end
+
+-- ============================================================
+-- МАСТЕР-ЦИКЛ СКАНИРОВАНИЯ (Один для всех)
+-- ============================================================
 task.spawn(function()
     while task.wait(2) do
         if IsPanic then continue end
@@ -425,57 +515,6 @@ local function clear_base_cache()
     for obj, data in pairs(chest_cache) do if data.gui then data.gui:Destroy() end end
     chest_cache = {}
     apply_xray(false)
-end
-
--- ============================================================
--- ORE SCANNER
--- ============================================================
-local ore_cache = {}
-local function scan_ores()
-    if not Config.OreESP.Enabled then return end
-    for _, obj in ipairs(Workspace:GetDescendants()) do
-        if obj.Name == "Boulder" and obj:IsA("Model") then
-            local rock = obj:FindFirstChild("Rock")
-            if rock and rock:IsA("MeshPart") and not ore_cache[obj] then
-                local bb = Instance.new("BillboardGui")
-                bb.Adornee = rock
-                bb.Size = UDim2.new(0, 100, 0, 30)
-                bb.StudsOffset = Vector3.new(0, rock.Size.Y / 2 + 1, 0)
-                bb.AlwaysOnTop = true
-                bb.Parent = rock
-                
-                local label = Instance.new("TextLabel")
-                label.Size = UDim2.new(1, 0, 1, 0)
-                label.BackgroundTransparency = 1
-                label.Text = "ROCK"
-                label.TextColor3 = Config.OreESP.Color
-                label.Font = Enum.Font.GothamBold
-                label.TextSize = 14
-                label.Parent = bb
-                
-                ore_cache[obj] = {gui = bb, rock = rock}
-            end
-        end
-    end
-end
-task.spawn(function()
-    while task.wait(2) do
-        if IsPanic or not Config.OreESP.Enabled then continue end
-        scan_ores()
-        for obj, data in pairs(ore_cache) do
-            if not obj.Parent or not data.rock.Parent then
-                data.gui:Destroy()
-                ore_cache[obj] = nil
-            else
-                local dist = (data.rock.Position - Camera.CFrame.Position).Magnitude
-                data.gui.Enabled = dist <= Config.OreESP.MaxDistance
-            end
-        end
-    end
-end)
-local function clear_ores()
-    for obj, data in pairs(ore_cache) do if data.gui then data.gui:Destroy() end end
-    ore_cache = {}
 end
 
 -- ============================================================
@@ -814,6 +853,40 @@ RunService.RenderStepped:Connect(function()
 end)
 
 -- ============================================================
+-- FPS BOOST & ANTI-AFK
+-- ============================================================
+local original_fps_settings = {}
+local function ToggleFPSBoost()
+    if Config.FPSBoost then
+        for _, v in ipairs(Lighting:GetChildren()) do
+            if v:IsA("PostEffect") then
+                original_fps_settings[v] = v.Enabled
+                v.Enabled = false
+            end
+        end
+        settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+    else
+        for v, enabled in pairs(original_fps_settings) do
+            if v and v.Parent then v.Enabled = enabled end
+        end
+        settings().Rendering.QualityLevel = Enum.QualityLevel.Level10
+        original_fps_settings = {}
+    end
+end
+
+task.spawn(function()
+    while task.wait(60) do
+        if Config.AntiAFK and not IsPanic then
+            local char = LocalPlayer.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.rad(math.random(-15, 15)), 0)
+            end
+        end
+    end
+end)
+
+-- ============================================================
 -- PANIC
 -- ============================================================
 local function toggle_panic()
@@ -852,10 +925,10 @@ Rayfield.CreateWindow = function(self, opts)
 end
 
 local Window = Rayfield:CreateWindow({
-    Name = "DEGRADE | ULTIMATE v195",
+    Name = "DEGRADE | ULTIMATE v200",
     LoadingTitle = "DEGRADE",
     LoadingSubtitle = "Ultimate Scanner",
-    ConfigurationSaving = { Enabled = false, FolderName = "DegradeBuild", FileName = "v195" },
+    ConfigurationSaving = { Enabled = false, FolderName = "DegradeBuild", FileName = "v200" },
     KeySystem = false,
 })
 
@@ -930,5 +1003,7 @@ SettingsTab:CreateToggle({Name="Anti-AFK", CurrentValue=false, Flag="antiafk", C
 SettingsTab:CreateLabel("Panic Key: Right Shift")
 
 task.delay(10, function()
-    send_notif("DEGRADE", "Ultimate Build v195 Loaded.", Color3.fromRGB(0, 200, 255))
+    send_notif("DEGRADE", "Ultimate Build v200 Loaded.", Color3.fromRGB(0, 200, 255))
 end)
+
+print("[DEGRADE] v200 loaded successfully.")
