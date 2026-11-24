@@ -1,4 +1,4 @@
--- language: Lua (Luau), file: degrade_ultimate_v171.lua, target: DEGRADE, executor: Solara / Delta / Fluxus
+-- language: Lua (Luau), file: degrade_ultimate_v180.lua, target: DEGRADE, executor: Solara / Delta / Fluxus
 -- CREATOR SMOKExR'S | DEGRADE Ultimate Build (by Lokeii)
 
 local Players = game:GetService("Players")
@@ -35,7 +35,7 @@ if not ok_rf or not Rayfield then
             t.Size = UDim2.new(1, -20, 1, -20)
             t.Position = UDim2.new(0, 10, 0, 10)
             t.BackgroundTransparency = 1
-            t.Text = "DEGRADE v171 — FALLBACK MODE"
+            t.Text = "DEGRADE v180 — FALLBACK MODE"
             t.TextColor3 = Color3.fromRGB(255, 50, 50)
             t.Font = Enum.Font.GothamBold
             t.TextSize = 14
@@ -82,7 +82,7 @@ local sub = Instance.new("TextLabel")
 sub.Size = UDim2.new(1, 0, 0, 20)
 sub.Position = UDim2.new(0, 0, 0.48, 0)
 sub.BackgroundTransparency = 1
-sub.Text = "ULTIMATE v171  •  loading"
+sub.Text = "ULTIMATE v180  •  loading"
 sub.TextColor3 = Color3.fromRGB(150, 150, 150)
 sub.Font = Enum.Font.Gotham
 sub.TextSize = 14
@@ -145,6 +145,7 @@ local Config = {
     BaseScan = { Enabled = false, MaxDistance = 800, CupboardColor = Color3.fromRGB(0, 255, 0), XRay = false },
     ChestScan = { Enabled = false, MaxDistance = 500, Color = Color3.fromRGB(255, 150, 0) },
     OreESP = { Enabled = false, MaxDistance = 400, Color = Color3.fromRGB(255, 255, 255) },
+    Movement = { Noclip = false, TweenNoclip = false },
     AntiAFK = false, FPSBoost = false
 }
 
@@ -182,6 +183,41 @@ local function world_to_screen(pos)
     end
     return nil
 end
+
+-- ============================================================
+-- MOVEMENT (Noclip & Tween)
+-- ============================================================
+local noclip_conn = nil
+local function toggle_noclip(state)
+    Config.Movement.Noclip = state
+    if state then
+        noclip_conn = RunService.Stepped:Connect(function()
+            local char = LocalPlayer.Character
+            if char then
+                for _, part in ipairs(char:GetDescendants()) do
+                    if part:IsA("BasePart") and part.CanCollide then
+                        part.CanCollide = false
+                    end
+                end
+            end
+        end)
+    else
+        if noclip_conn then noclip_conn:Disconnect(); noclip_conn = nil end
+    end
+end
+
+UserInputService.InputBegan:Connect(function(input, gp)
+    if gp then return end
+    if input.UserInputType == Enum.UserInputType.MouseButton2 and Config.Movement.TweenNoclip then
+        local char, hum, hrp = get_character()
+        if hrp then
+            local targetPos = Camera.CFrame.Position + Camera.CFrame.LookVector * 15
+            local targetCFrame = CFrame.new(targetPos) * Camera.CFrame.Rotation
+            local tween = TweenService:Create(hrp, TweenInfo.new(0.2, Enum.EasingStyle.Linear), {CFrame = targetCFrame})
+            tween:Play()
+        end
+    end
+end)
 
 -- ============================================================
 -- BASE & CHEST SCANNER (Data-driven with API Names)
@@ -776,6 +812,7 @@ local function toggle_panic()
         for plr, e in pairs(esp_cache) do hide_esp(e) end
         clear_base_cache()
         clear_ores()
+        toggle_noclip(false)
     else
         wm_gui.Enabled = true
         notif_gui.Enabled = true
@@ -802,10 +839,10 @@ Rayfield.CreateWindow = function(self, opts)
 end
 
 local Window = Rayfield:CreateWindow({
-    Name = "DEGRADE | ULTIMATE v171",
+    Name = "DEGRADE | ULTIMATE v180",
     LoadingTitle = "DEGRADE",
     LoadingSubtitle = "Ultimate Scanner",
-    ConfigurationSaving = { Enabled = false, FolderName = "DegradeBuild", FileName = "v171" },
+    ConfigurationSaving = { Enabled = false, FolderName = "DegradeBuild", FileName = "v180" },
     KeySystem = false,
 })
 
@@ -818,6 +855,11 @@ CombatTab:CreateDropdown({Name="Aim Part", Options={"Head","Body"}, CurrentOptio
 CombatTab:CreateSlider({Name="FOV Radius", Range={50,400}, Increment=10, CurrentValue=120, Flag="aim_fov", Callback=function(v) Config.Aimbot.FOV=v end})
 CombatTab:CreateSlider({Name="Smoothness", Range={0.01,1}, Increment=0.01, CurrentValue=0.08, Flag="aim_sm", Callback=function(v) Config.Aimbot.Smoothness=v end})
 CombatTab:CreateToggle({Name="Wall Check", CurrentValue=true, Flag="aim_wall", Callback=function(v) Config.Aimbot.WallCheck=v end})
+
+local MovementTab = Window:CreateTab("Movement")
+MovementTab:CreateSection("Noclip & Tween")
+MovementTab:CreateToggle({Name="Noclip (Risk of ban)", CurrentValue=false, Flag="noclip", Callback=function(v) toggle_noclip(v) end})
+MovementTab:CreateToggle({Name="Tween Noclip (Hold RMB)", CurrentValue=false, Flag="tween_noclip", Callback=function(v) Config.Movement.TweenNoclip=v end})
 
 local VisualTab = Window:CreateTab("Visuals")
 VisualTab:CreateSection("ESP Master")
@@ -859,6 +901,37 @@ BaseTab:CreateToggle({Name="Enable Chest Scanner", CurrentValue=false, Flag="che
 BaseTab:CreateSlider({Name="Chest Max Dist", Range={100,2000}, Increment=100, CurrentValue=500, Flag="chest_dist", Callback=function(v) Config.ChestScan.MaxDistance=v end})
 BaseTab:CreateColorPicker({Name="Chest Color", Color=Config.ChestScan.Color, Flag="chest_col", Callback=function(c) Config.ChestScan.Color=c end})
 
+BaseTab:CreateSection("Debug")
+BaseTab:CreateButton({
+    Name="Force Scan (Console)",
+    Callback=function()
+        print("=== CUPBOARD ATTRIBUTES ===")
+        local found = false
+        for _, obj in ipairs(Workspace:GetDescendants()) do
+            if obj.Name == "Cabinet" then
+                found = true
+                print("Cabinet found in:", obj.Parent and obj.Parent.Name or "nil")
+                if obj.Parent then
+                    local attrs = obj.Parent:GetAttributes()
+                    for k, v in pairs(attrs) do
+                        print("  [Building Attr]", k, "=", tostring(v))
+                    end
+                end
+                local c_attrs = obj:GetAttributes()
+                for k, v in pairs(c_attrs) do
+                    print("  [Cabinet Attr]", k, "=", tostring(v))
+                end
+                print("=== END ===")
+                break
+            end
+        end
+        if not found then
+            print("[ERROR] No Cabinet found in Workspace!")
+            print("=== END ===")
+        end
+    end
+})
+
 local ModTab = Window:CreateTab("Mods")
 ModTab:CreateSection("Behavior Detector")
 ModTab:CreateToggle({Name="Suspect ESP (Force Red Box)", CurrentValue=false, Flag="mod_esp", Callback=function(v) Config.Mod.Enabled=v send_notif("SUSPECT ESP", v and "Enabled" or "Disabled", Color3.fromRGB(255,50,50)) end})
@@ -875,5 +948,5 @@ SettingsTab:CreateToggle({Name="Anti-AFK", CurrentValue=false, Flag="antiafk", C
 SettingsTab:CreateLabel("Panic Key: Right Shift")
 
 task.delay(10, function()
-    send_notif("DEGRADE", "Ultimate Build v171 Loaded.", Color3.fromRGB(0, 200, 255))
+    send_notif("DEGRADE", "Ultimate Build v180 Loaded.", Color3.fromRGB(0, 200, 255))
 end)
