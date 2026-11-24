@@ -1,4 +1,4 @@
--- language: Lua (Luau), file: degrade_ultimate_v190.lua, target: DEGRADE, executor: Solara / Delta / Fluxus
+-- language: Lua (Luau), file: degrade_ultimate_v195.lua, target: DEGRADE, executor: Solara / Delta / Fluxus
 -- CREATOR SMOKExR'S | DEGRADE Ultimate Build (by Lokeii)
 
 local Players = game:GetService("Players")
@@ -35,7 +35,7 @@ if not ok_rf or not Rayfield then
             t.Size = UDim2.new(1, -20, 1, -20)
             t.Position = UDim2.new(0, 10, 0, 10)
             t.BackgroundTransparency = 1
-            t.Text = "DEGRADE v190 — FALLBACK MODE"
+            t.Text = "DEGRADE v195 — FALLBACK MODE"
             t.TextColor3 = Color3.fromRGB(255, 50, 50)
             t.Font = Enum.Font.GothamBold
             t.TextSize = 14
@@ -82,7 +82,7 @@ local sub = Instance.new("TextLabel")
 sub.Size = UDim2.new(1, 0, 0, 20)
 sub.Position = UDim2.new(0, 0, 0.48, 0)
 sub.BackgroundTransparency = 1
-sub.Text = "ULTIMATE v190  •  loading"
+sub.Text = "ULTIMATE v195  •  loading"
 sub.TextColor3 = Color3.fromRGB(150, 150, 150)
 sub.Font = Enum.Font.Gotham
 sub.TextSize = 14
@@ -145,7 +145,7 @@ local Config = {
     BaseScan = { Enabled = false, MaxDistance = 800, CupboardColor = Color3.fromRGB(0, 255, 0), XRay = false },
     ChestScan = { Enabled = false, MaxDistance = 500, Color = Color3.fromRGB(255, 150, 0) },
     OreESP = { Enabled = false, MaxDistance = 400, Color = Color3.fromRGB(255, 255, 255) },
-    Movement = { Noclip = false, GlitchKey = false },
+    Movement = { Noclip = false, SafeTP = false },
     AntiAFK = false, FPSBoost = false
 }
 
@@ -185,7 +185,7 @@ local function world_to_screen(pos)
 end
 
 -- ============================================================
--- MOVEMENT (Safe Glitch)
+-- MOVEMENT (Safe Teleport)
 -- ============================================================
 local noclip_conn = nil
 local function toggle_noclip(state)
@@ -206,31 +206,34 @@ local function toggle_noclip(state)
     end
 end
 
--- Безопасный глитч (Под карту и наверх)
-local function safe_glitch()
+local function safe_tp()
     local char, hum, hrp = get_character()
     if not hrp then return end
     
-    local original_cframe = hrp.CFrame
-    local target_cframe = original_cframe + (original_cframe.LookVector * 12)
+    local rayOrigin = Camera.CFrame.Position
+    local rayDirection = Camera.CFrame.LookVector * 20
     
-    -- 1. Проваливаемся под карту
-    hrp.CFrame = original_cframe - Vector3.new(0, 15, 0)
-    task.wait(0.15)
+    -- Ищем, куда можно встать за стеной
+    local rayParams = RaycastParams.new()
+    rayParams.FilterDescendantsInstances = {LocalPlayer.Character}
+    rayParams.FilterType = Enum.RaycastFilterType.Exclude
     
-    -- 2. Перемещаемся вперед и наверх (уже за стеной)
-    hrp.CFrame = target_cframe + Vector3.new(0, 5, 0)
+    local hit = Workspace:Raycast(rayOrigin, rayDirection, rayParams)
+    if hit then
+        local targetPos = hit.Position + (Camera.CFrame.LookVector * 2) + Vector3.new(0, 3, 0)
+        hrp.CFrame = CFrame.new(targetPos) * Camera.CFrame.Rotation
+    end
 end
 
 UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
-    if input.UserInputType == Enum.UserInputType.MouseButton2 and Config.Movement.GlitchKey then
-        safe_glitch()
+    if input.UserInputType == Enum.UserInputType.MouseButton2 and Config.Movement.SafeTP then
+        safe_tp()
     end
 end)
 
 -- ============================================================
--- BASE & CHEST SCANNER (Data-driven with API Names)
+-- BASE & CHEST SCANNER
 -- ============================================================
 local base_cache = {}
 local chest_cache = {}
@@ -849,10 +852,10 @@ Rayfield.CreateWindow = function(self, opts)
 end
 
 local Window = Rayfield:CreateWindow({
-    Name = "DEGRADE | ULTIMATE v190",
+    Name = "DEGRADE | ULTIMATE v195",
     LoadingTitle = "DEGRADE",
     LoadingSubtitle = "Ultimate Scanner",
-    ConfigurationSaving = { Enabled = false, FolderName = "DegradeBuild", FileName = "v190" },
+    ConfigurationSaving = { Enabled = false, FolderName = "DegradeBuild", FileName = "v195" },
     KeySystem = false,
 })
 
@@ -867,9 +870,9 @@ CombatTab:CreateSlider({Name="Smoothness", Range={0.01,1}, Increment=0.01, Curre
 CombatTab:CreateToggle({Name="Wall Check", CurrentValue=true, Flag="aim_wall", Callback=function(v) Config.Aimbot.WallCheck=v end})
 
 local MovementTab = Window:CreateTab("Movement")
-MovementTab:CreateSection("Safe Noclip")
+MovementTab:CreateSection("Safe Glitch")
 MovementTab:CreateToggle({Name="Noclip (RISK)", CurrentValue=false, Flag="noclip", Callback=function(v) toggle_noclip(v) end})
-MovementTab:CreateToggle({Name="Glitch Noclip (Hold RMB)", CurrentValue=false, Flag="glitch_noclip", Callback=function(v) Config.Movement.GlitchKey=v end})
+MovementTab:CreateToggle({Name="Safe TP (Hold RMB)", CurrentValue=false, Flag="safetp", Callback=function(v) Config.Movement.SafeTP=v end})
 
 local VisualTab = Window:CreateTab("Visuals")
 VisualTab:CreateSection("ESP Master")
@@ -927,5 +930,5 @@ SettingsTab:CreateToggle({Name="Anti-AFK", CurrentValue=false, Flag="antiafk", C
 SettingsTab:CreateLabel("Panic Key: Right Shift")
 
 task.delay(10, function()
-    send_notif("DEGRADE", "Ultimate Build v190 Loaded.", Color3.fromRGB(0, 200, 255))
+    send_notif("DEGRADE", "Ultimate Build v195 Loaded.", Color3.fromRGB(0, 200, 255))
 end)
