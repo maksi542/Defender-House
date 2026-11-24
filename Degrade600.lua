@@ -1,4 +1,4 @@
--- language: Lua (Luau), file: degrade_ultimate_v180.lua, target: DEGRADE, executor: Solara / Delta / Fluxus
+-- language: Lua (Luau), file: degrade_ultimate_v190.lua, target: DEGRADE, executor: Solara / Delta / Fluxus
 -- CREATOR SMOKExR'S | DEGRADE Ultimate Build (by Lokeii)
 
 local Players = game:GetService("Players")
@@ -35,7 +35,7 @@ if not ok_rf or not Rayfield then
             t.Size = UDim2.new(1, -20, 1, -20)
             t.Position = UDim2.new(0, 10, 0, 10)
             t.BackgroundTransparency = 1
-            t.Text = "DEGRADE v180 — FALLBACK MODE"
+            t.Text = "DEGRADE v190 — FALLBACK MODE"
             t.TextColor3 = Color3.fromRGB(255, 50, 50)
             t.Font = Enum.Font.GothamBold
             t.TextSize = 14
@@ -82,7 +82,7 @@ local sub = Instance.new("TextLabel")
 sub.Size = UDim2.new(1, 0, 0, 20)
 sub.Position = UDim2.new(0, 0, 0.48, 0)
 sub.BackgroundTransparency = 1
-sub.Text = "ULTIMATE v180  •  loading"
+sub.Text = "ULTIMATE v190  •  loading"
 sub.TextColor3 = Color3.fromRGB(150, 150, 150)
 sub.Font = Enum.Font.Gotham
 sub.TextSize = 14
@@ -145,7 +145,7 @@ local Config = {
     BaseScan = { Enabled = false, MaxDistance = 800, CupboardColor = Color3.fromRGB(0, 255, 0), XRay = false },
     ChestScan = { Enabled = false, MaxDistance = 500, Color = Color3.fromRGB(255, 150, 0) },
     OreESP = { Enabled = false, MaxDistance = 400, Color = Color3.fromRGB(255, 255, 255) },
-    Movement = { Noclip = false, TweenNoclip = false },
+    Movement = { Noclip = false, GlitchKey = false },
     AntiAFK = false, FPSBoost = false
 }
 
@@ -185,7 +185,7 @@ local function world_to_screen(pos)
 end
 
 -- ============================================================
--- MOVEMENT (Noclip & Tween)
+-- MOVEMENT (Safe Glitch)
 -- ============================================================
 local noclip_conn = nil
 local function toggle_noclip(state)
@@ -206,16 +206,26 @@ local function toggle_noclip(state)
     end
 end
 
+-- Безопасный глитч (Под карту и наверх)
+local function safe_glitch()
+    local char, hum, hrp = get_character()
+    if not hrp then return end
+    
+    local original_cframe = hrp.CFrame
+    local target_cframe = original_cframe + (original_cframe.LookVector * 12)
+    
+    -- 1. Проваливаемся под карту
+    hrp.CFrame = original_cframe - Vector3.new(0, 15, 0)
+    task.wait(0.15)
+    
+    -- 2. Перемещаемся вперед и наверх (уже за стеной)
+    hrp.CFrame = target_cframe + Vector3.new(0, 5, 0)
+end
+
 UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
-    if input.UserInputType == Enum.UserInputType.MouseButton2 and Config.Movement.TweenNoclip then
-        local char, hum, hrp = get_character()
-        if hrp then
-            local targetPos = Camera.CFrame.Position + Camera.CFrame.LookVector * 15
-            local targetCFrame = CFrame.new(targetPos) * Camera.CFrame.Rotation
-            local tween = TweenService:Create(hrp, TweenInfo.new(0.2, Enum.EasingStyle.Linear), {CFrame = targetCFrame})
-            tween:Play()
-        end
+    if input.UserInputType == Enum.UserInputType.MouseButton2 and Config.Movement.GlitchKey then
+        safe_glitch()
     end
 end)
 
@@ -839,10 +849,10 @@ Rayfield.CreateWindow = function(self, opts)
 end
 
 local Window = Rayfield:CreateWindow({
-    Name = "DEGRADE | ULTIMATE v180",
+    Name = "DEGRADE | ULTIMATE v190",
     LoadingTitle = "DEGRADE",
     LoadingSubtitle = "Ultimate Scanner",
-    ConfigurationSaving = { Enabled = false, FolderName = "DegradeBuild", FileName = "v180" },
+    ConfigurationSaving = { Enabled = false, FolderName = "DegradeBuild", FileName = "v190" },
     KeySystem = false,
 })
 
@@ -857,9 +867,9 @@ CombatTab:CreateSlider({Name="Smoothness", Range={0.01,1}, Increment=0.01, Curre
 CombatTab:CreateToggle({Name="Wall Check", CurrentValue=true, Flag="aim_wall", Callback=function(v) Config.Aimbot.WallCheck=v end})
 
 local MovementTab = Window:CreateTab("Movement")
-MovementTab:CreateSection("Noclip & Tween")
-MovementTab:CreateToggle({Name="Noclip (Risk of ban)", CurrentValue=false, Flag="noclip", Callback=function(v) toggle_noclip(v) end})
-MovementTab:CreateToggle({Name="Tween Noclip (Hold RMB)", CurrentValue=false, Flag="tween_noclip", Callback=function(v) Config.Movement.TweenNoclip=v end})
+MovementTab:CreateSection("Safe Noclip")
+MovementTab:CreateToggle({Name="Noclip (RISK)", CurrentValue=false, Flag="noclip", Callback=function(v) toggle_noclip(v) end})
+MovementTab:CreateToggle({Name="Glitch Noclip (Hold RMB)", CurrentValue=false, Flag="glitch_noclip", Callback=function(v) Config.Movement.GlitchKey=v end})
 
 local VisualTab = Window:CreateTab("Visuals")
 VisualTab:CreateSection("ESP Master")
@@ -894,43 +904,12 @@ BaseTab:CreateSection("Cupboards")
 BaseTab:CreateToggle({Name="Enable Cupboard Scanner", CurrentValue=false, Flag="base_on", Callback=function(v) Config.BaseScan.Enabled=v send_notif("BASE SCAN", v and "Enabled" or "Disabled", Color3.fromRGB(0,200,255)) end})
 BaseTab:CreateSlider({Name="Max Scan Distance", Range={100,3000}, Increment=100, CurrentValue=800, Flag="base_dist", Callback=function(v) Config.BaseScan.MaxDistance=v end})
 BaseTab:CreateColorPicker({Name="Cupboard Color", Color=Config.BaseScan.CupboardColor, Flag="base_tc_col", Callback=function(c) Config.BaseScan.CupboardColor=c end})
-BaseTab:CreateToggle({Name="Base X-Ray (See through walls)", CurrentValue=false, Flag="base_xray", Callback=function(v) Config.BaseScan.XRay=v end})
+BaseTab:CreateToggle({Name="Base X-Ray", CurrentValue=false, Flag="base_xray", Callback=function(v) Config.BaseScan.XRay=v end})
 
 BaseTab:CreateSection("Chests")
 BaseTab:CreateToggle({Name="Enable Chest Scanner", CurrentValue=false, Flag="chest_on", Callback=function(v) Config.ChestScan.Enabled=v send_notif("CHEST SCAN", v and "Enabled" or "Disabled", Color3.fromRGB(255,150,0)) end})
 BaseTab:CreateSlider({Name="Chest Max Dist", Range={100,2000}, Increment=100, CurrentValue=500, Flag="chest_dist", Callback=function(v) Config.ChestScan.MaxDistance=v end})
 BaseTab:CreateColorPicker({Name="Chest Color", Color=Config.ChestScan.Color, Flag="chest_col", Callback=function(c) Config.ChestScan.Color=c end})
-
-BaseTab:CreateSection("Debug")
-BaseTab:CreateButton({
-    Name="Force Scan (Console)",
-    Callback=function()
-        print("=== CUPBOARD ATTRIBUTES ===")
-        local found = false
-        for _, obj in ipairs(Workspace:GetDescendants()) do
-            if obj.Name == "Cabinet" then
-                found = true
-                print("Cabinet found in:", obj.Parent and obj.Parent.Name or "nil")
-                if obj.Parent then
-                    local attrs = obj.Parent:GetAttributes()
-                    for k, v in pairs(attrs) do
-                        print("  [Building Attr]", k, "=", tostring(v))
-                    end
-                end
-                local c_attrs = obj:GetAttributes()
-                for k, v in pairs(c_attrs) do
-                    print("  [Cabinet Attr]", k, "=", tostring(v))
-                end
-                print("=== END ===")
-                break
-            end
-        end
-        if not found then
-            print("[ERROR] No Cabinet found in Workspace!")
-            print("=== END ===")
-        end
-    end
-})
 
 local ModTab = Window:CreateTab("Mods")
 ModTab:CreateSection("Behavior Detector")
@@ -948,5 +927,5 @@ SettingsTab:CreateToggle({Name="Anti-AFK", CurrentValue=false, Flag="antiafk", C
 SettingsTab:CreateLabel("Panic Key: Right Shift")
 
 task.delay(10, function()
-    send_notif("DEGRADE", "Ultimate Build v180 Loaded.", Color3.fromRGB(0, 200, 255))
+    send_notif("DEGRADE", "Ultimate Build v190 Loaded.", Color3.fromRGB(0, 200, 255))
 end)
