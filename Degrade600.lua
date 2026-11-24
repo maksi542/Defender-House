@@ -1,6 +1,6 @@
--- language: Lua (Luau), file: degrade_ultimate_v200.lua, target: DEGRADE, executor: Solara / Delta / Fluxus
--- CREATOR SMOKExR'S | DEGRADE Ultimate Build v200 (by Lokeii)
--- FIXED: Threads, X-Ray, FPSBoost, Safe TP (Anchor Glitch)
+-- language: Lua (Luau), file: degrade_ultimate_v210.lua, target: DEGRADE, executor: Solara / Delta / Fluxus
+-- CREATOR SMOKExR'S | DEGRADE Ultimate Build v210 (by Lokeii)
+-- ADDED: Raycast Hook (Anti-Bypass), Velocity Glide
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -37,7 +37,7 @@ if not ok_rf or not Rayfield then
             t.Size = UDim2.new(1, -20, 1, -20)
             t.Position = UDim2.new(0, 10, 0, 10)
             t.BackgroundTransparency = 1
-            t.Text = "DEGRADE v200 — FALLBACK MODE"
+            t.Text = "DEGRADE v210 — FALLBACK MODE"
             t.TextColor3 = Color3.fromRGB(255, 50, 50)
             t.Font = Enum.Font.GothamBold
             t.TextSize = 14
@@ -84,7 +84,7 @@ local sub = Instance.new("TextLabel")
 sub.Size = UDim2.new(1, 0, 0, 20)
 sub.Position = UDim2.new(0, 0, 0.48, 0)
 sub.BackgroundTransparency = 1
-sub.Text = "ULTIMATE v200  •  loading"
+sub.Text = "ULTIMATE v210  •  loading"
 sub.TextColor3 = Color3.fromRGB(150, 150, 150)
 sub.Font = Enum.Font.Gotham
 sub.TextSize = 14
@@ -133,6 +133,8 @@ end)
 -- ============================================================
 local ThemeColor = Color3.fromRGB(255, 50, 50)
 local IsPanic = false
+local bypass_active = false
+local hook_restore = nil
 
 local Config = {
     Aimbot = { Enabled = false, FOV = 120, Smoothness = 0.08, WallCheck = true, TeamCheck = true, AimPart = "Head", AlwaysOn = false },
@@ -147,7 +149,7 @@ local Config = {
     BaseScan = { Enabled = false, MaxDistance = 800, CupboardColor = Color3.fromRGB(0, 255, 0), XRay = false },
     ChestScan = { Enabled = false, MaxDistance = 500, Color = Color3.fromRGB(255, 150, 0) },
     OreESP = { Enabled = false, MaxDistance = 400, Color = Color3.fromRGB(255, 255, 255) },
-    Movement = { Noclip = false, SafeTP = false },
+    Movement = { Noclip = false, SafeTP = false, Bypass = false },
     AntiAFK = false, FPSBoost = false
 }
 
@@ -187,7 +189,68 @@ local function world_to_screen(pos)
 end
 
 -- ============================================================
--- MOVEMENT (Noclip & Safe TP with Anchor Glitch)
+-- RAYCAST HOOK (Anti-Bypass)
+-- ============================================================
+local original_raycast = nil
+local original_raycastbatch = nil
+
+local function toggle_bypass(state)
+    Config.Movement.Bypass = state
+    if state and not bypass_active then
+        if hookfunction and Workspace.Raycast then
+            bypass_active = true
+            original_raycast = hookfunction(Workspace.Raycast, function(origin, direction, params)
+                -- Если луч от античита (нет игнора для LocalPlayer.Character) - возвращаем nil
+                local is_ours = false
+                if params and params.FilterDescendantsInstances then
+                    for _, obj in ipairs(params.FilterDescendantsInstances) do
+                        if obj == LocalPlayer.Character then
+                            is_ours = true
+                            break
+                        end
+                    end
+                end
+                if not is_ours then
+                    return nil -- Ложный raycast для античита
+                end
+                return original_raycast(origin, direction, params)
+            end)
+            
+            if hookfunction and Workspace.RaycastBatch then
+                original_raycastbatch = hookfunction(Workspace.RaycastBatch, function(origin, directions, params)
+                    local is_ours = false
+                    if params and params.FilterDescendantsInstances then
+                        for _, obj in ipairs(params.FilterDescendantsInstances) do
+                            if obj == LocalPlayer.Character then
+                                is_ours = true
+                                break
+                            end
+                        end
+                    end
+                    if not is_ours then return {} end
+                    return original_raycastbatch(origin, directions, params)
+                end)
+            end
+            send_notif("BYPASS", "Raycast Hook Active", Color3.fromRGB(0, 255, 0))
+        else
+            send_notif("BYPASS", "hookfunction not supported", Color3.fromRGB(255, 0, 0))
+        end
+    elseif not state and bypass_active then
+        if original_raycast and Workspace.Raycast then
+            hookfunction(Workspace.Raycast, original_raycast)
+            original_raycast = nil
+        end
+        if original_raycastbatch and Workspace.RaycastBatch then
+            hookfunction(Workspace.RaycastBatch, original_raycastbatch)
+            original_raycastbatch = nil
+        end
+        bypass_active = false
+        send_notif("BYPASS", "Disabled", Color3.fromRGB(255, 0, 0))
+    end
+end
+
+-- ============================================================
+-- MOVEMENT (Noclip & Velocity Glide)
 -- ============================================================
 local noclip_conn = nil
 local function toggle_noclip(state)
@@ -237,20 +300,32 @@ local function safe_tp()
             part.CanCollide = false
         end
     end
+
+    local direction = (targetPos - hrp.Position).Unit
+    local distance = (targetPos - hrp.Position).Magnitude
+    local speed = 200
+    local old_ws = hum.WalkSpeed
+    hum.WalkSpeed = speed
     
-    local old_anchor = hrp.Anchored
-    hrp.Anchored = true
+    hrp.AssemblyLinearVelocity = direction * speed
+    hum.PlatformStand = true
     
-    hrp.CFrame = CFrame.new(targetPos) * Camera.CFrame.Rotation
+    local start_time = tick()
+    while tick() - start_time < (distance / speed) + 0.5 do
+        task.wait(0.05)
+        if not hrp or not hrp.Parent then break end
+        if (hrp.Position - targetPos).Magnitude < 3 then break end
+    end
     
-    task.wait(0.1)
+    if hrp and hrp.Parent then
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        hum.PlatformStand = false
+        hum.WalkSpeed = old_ws
+    end
     
-    if char and char.Parent and hrp then
-        hrp.Anchored = old_anchor
-        for part, can_col in pairs(old_collides) do
-            if part and part.Parent then
-                part.CanCollide = can_col
-            end
+    for part, can_col in pairs(old_collides) do
+        if part and part.Parent then
+            part.CanCollide = can_col
         end
     end
     is_tping = false
@@ -470,7 +545,7 @@ local function clear_ores()
 end
 
 -- ============================================================
--- МАСТЕР-ЦИКЛ СКАНИРОВАНИЯ (Один для всех)
+-- МАСТЕР-ЦИКЛ СКАНИРОВАНИЯ
 -- ============================================================
 task.spawn(function()
     while task.wait(2) do
@@ -899,6 +974,7 @@ local function toggle_panic()
         clear_base_cache()
         clear_ores()
         toggle_noclip(false)
+        toggle_bypass(false)
     else
         wm_gui.Enabled = true
         notif_gui.Enabled = true
@@ -925,10 +1001,10 @@ Rayfield.CreateWindow = function(self, opts)
 end
 
 local Window = Rayfield:CreateWindow({
-    Name = "DEGRADE | ULTIMATE v200",
+    Name = "DEGRADE | ULTIMATE v210",
     LoadingTitle = "DEGRADE",
     LoadingSubtitle = "Ultimate Scanner",
-    ConfigurationSaving = { Enabled = false, FolderName = "DegradeBuild", FileName = "v200" },
+    ConfigurationSaving = { Enabled = false, FolderName = "DegradeBuild", FileName = "v210" },
     KeySystem = false,
 })
 
@@ -944,6 +1020,7 @@ CombatTab:CreateToggle({Name="Wall Check", CurrentValue=true, Flag="aim_wall", C
 
 local MovementTab = Window:CreateTab("Movement")
 MovementTab:CreateSection("Safe Glitch")
+MovementTab:CreateToggle({Name="Raycast Bypass (Anti-Cheat)", CurrentValue=false, Flag="bypass", Callback=function(v) toggle_bypass(v) send_notif("BYPASS", v and "ON" or "OFF", v and Color3.fromRGB(0,255,0) or Color3.fromRGB(255,0,0)) end})
 MovementTab:CreateToggle({Name="Noclip (RISK)", CurrentValue=false, Flag="noclip", Callback=function(v) toggle_noclip(v) end})
 MovementTab:CreateToggle({Name="Safe TP (Hold RMB)", CurrentValue=false, Flag="safetp", Callback=function(v) Config.Movement.SafeTP=v end})
 
@@ -1003,7 +1080,10 @@ SettingsTab:CreateToggle({Name="Anti-AFK", CurrentValue=false, Flag="antiafk", C
 SettingsTab:CreateLabel("Panic Key: Right Shift")
 
 task.delay(10, function()
-    send_notif("DEGRADE", "Ultimate Build v200 Loaded.", Color3.fromRGB(0, 200, 255))
+    send_notif("DEGRADE", "Ultimate Build v210 Loaded.", Color3.fromRGB(0, 200, 255))
+    if not hookfunction then
+        send_notif("WARNING", "hookfunction not supported. Bypass disabled.", Color3.fromRGB(255, 200, 0))
+    end
 end)
 
-print("[DEGRADE] v200 loaded successfully.")
+print("[DEGRADE] v210 loaded.")
