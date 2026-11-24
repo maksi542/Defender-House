@@ -1,6 +1,6 @@
--- language: Lua (Luau), file: degrade_ultimate_v250.lua, target: DEGRADE, executor: Solara / Delta / Fluxus
--- CREATOR SMOKExR'S | DEGRADE Ultimate Build v250 (by Lokeii)
--- FIXED: Safe TP (Ragdoll State + CFrame Snap), Removed Raycast Bypass
+-- language: Lua (Luau), file: degrade_ultimate_v260.lua, target: DEGRADE, executor: Solara / Delta / Fluxus
+-- CREATOR SMOKExR'S | DEGRADE Ultimate Build v260 (by Lokeii)
+-- ADDED: MoveTo Hook (Anti-Rubberband), Deep Bypass
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -37,7 +37,7 @@ if not ok_rf or not Rayfield then
             t.Size = UDim2.new(1, -20, 1, -20)
             t.Position = UDim2.new(0, 10, 0, 10)
             t.BackgroundTransparency = 1
-            t.Text = "DEGRADE v250 — FALLBACK MODE"
+            t.Text = "DEGRADE v260 — FALLBACK MODE"
             t.TextColor3 = Color3.fromRGB(255, 50, 50)
             t.Font = Enum.Font.GothamBold
             t.TextSize = 14
@@ -84,7 +84,7 @@ local sub = Instance.new("TextLabel")
 sub.Size = UDim2.new(1, 0, 0, 20)
 sub.Position = UDim2.new(0, 0, 0.48, 0)
 sub.BackgroundTransparency = 1
-sub.Text = "ULTIMATE v250  •  loading"
+sub.Text = "ULTIMATE v260  •  loading"
 sub.TextColor3 = Color3.fromRGB(150, 150, 150)
 sub.Font = Enum.Font.Gotham
 sub.TextSize = 14
@@ -133,6 +133,7 @@ end)
 -- ============================================================
 local ThemeColor = Color3.fromRGB(255, 50, 50)
 local IsPanic = false
+local bypass_hook = nil
 
 local Config = {
     Aimbot = { Enabled = false, FOV = 120, Smoothness = 0.08, WallCheck = true, TeamCheck = true, AimPart = "Head", AlwaysOn = false },
@@ -147,7 +148,7 @@ local Config = {
     BaseScan = { Enabled = false, MaxDistance = 800, CupboardColor = Color3.fromRGB(0, 255, 0), XRay = false },
     ChestScan = { Enabled = false, MaxDistance = 500, Color = Color3.fromRGB(255, 150, 0) },
     OreESP = { Enabled = false, MaxDistance = 400, Color = Color3.fromRGB(255, 255, 255) },
-    Movement = { Noclip = false, SafeTP = false },
+    Movement = { Noclip = false, SafeTP = false, MoveHook = false },
     AntiAFK = false, FPSBoost = false
 }
 
@@ -187,7 +188,59 @@ local function world_to_screen(pos)
 end
 
 -- ============================================================
--- MOVEMENT (Noclip & Safe TP v7 - Ragdoll Snap)
+-- MOVE HOOK (Anti-Rubberband)
+-- ============================================================
+local function toggle_move_hook(state)
+    Config.Movement.MoveHook = state
+    
+    if not hookmetamethod then
+        send_notif("MOVE HOOK", "hookmetamethod not supported!", Color3.fromRGB(255, 0, 0))
+        return
+    end
+    
+    if state and not bypass_hook then
+        local success, err = pcall(function()
+            local old_namecall
+            old_namecall = hookmetamethod(game, "__namecall", function(self, ...)
+                local method = getnamecallmethod()
+                -- Ловим вызов MoveTo у нашего Humanoid
+                if method == "MoveTo" and self == LocalPlayer.Character then
+                    -- Если это не наш вызов — блокируем
+                    if not checkcaller() then
+                        return nil
+                    end
+                end
+                -- Ловим ChangeState от сервера (для отката позиции)
+                if method == "ChangeState" then
+                    local args = {...}
+                    local new_state = args[1]
+                    -- Если сервер пытается сменить состояние (например, в Landing) — блокируем
+                    if not checkcaller() and (new_state == Enum.HumanoidStateType.Landed or new_state == Enum.HumanoidStateType.Running) then
+                        return nil
+                    end
+                end
+                return old_namecall(self, ...)
+            end)
+            bypass_hook = old_namecall
+        end)
+        
+        if success then
+            send_notif("MOVE HOOK", "Active (Anti-Rubberband)", Color3.fromRGB(0, 255, 0))
+        else
+            warn("[DEGRADE] Move Hook failed: " .. tostring(err))
+            send_notif("MOVE HOOK", "Hook failed. See console.", Color3.fromRGB(255, 0, 0))
+        end
+    elseif not state and bypass_hook then
+        pcall(function()
+            hookmetamethod(game, "__namecall", bypass_hook)
+        end)
+        bypass_hook = nil
+        send_notif("MOVE HOOK", "Disabled", Color3.fromRGB(255, 0, 0))
+    end
+end
+
+-- ============================================================
+-- MOVEMENT (Noclip & Safe TP)
 -- ============================================================
 local noclip_conn = nil
 local function toggle_noclip(state)
@@ -214,7 +267,6 @@ local function safe_tp()
     local char, hum, hrp = get_character()
     if not hrp or not hum then return end
     
-    -- 1. Рейкаст вперед
     local rayParams = RaycastParams.new()
     rayParams.FilterDescendantsInstances = {char}
     rayParams.FilterType = Enum.RaycastFilterType.Exclude
@@ -224,7 +276,6 @@ local function safe_tp()
     local hit = Workspace:Raycast(rayOrigin, rayDirection, rayParams)
     if not hit then return end
     
-    -- 2. Точка за стеной + проверка пола
     local targetPos = hit.Position + (Camera.CFrame.LookVector * 5) + Vector3.new(0, 3, 0)
     local floorHit = Workspace:Raycast(targetPos + Vector3.new(0, 5, 0), Vector3.new(0, -20, 0), rayParams)
     if not floorHit then return end
@@ -232,7 +283,6 @@ local function safe_tp()
     targetPos = floorHit.Position + Vector3.new(0, 3.5, 0)
     is_tping = true
 
-    -- 3. Сохраняем коллизии
     local old_collides = {}
     for _, part in ipairs(char:GetDescendants()) do
         if part:IsA("BasePart") then
@@ -241,22 +291,14 @@ local function safe_tp()
         end
     end
     
-    -- 4. Заставляем Humanoid думать, что мы в состоянии физики (Ragdoll)
-    local old_state = hum:GetState()
-    hum:ChangeState(Enum.HumanoidStateType.Physics)
-    
-    -- 5. Анкорим и переносим
     local old_anchor = hrp.Anchored
     hrp.Anchored = true
     hrp.CFrame = CFrame.new(targetPos) * Camera.CFrame.Rotation
     
-    -- 6. Ждем (сервер должен синхронизировать позицию в состоянии Physics)
-    task.wait(0.15)
+    task.wait(0.1)
     
-    -- 7. Возвращаем всё обратно
     if char and char.Parent and hrp then
         hrp.Anchored = old_anchor
-        hum:ChangeState(old_state)
         for part, can_col in pairs(old_collides) do
             if part and part.Parent then
                 part.CanCollide = can_col
@@ -909,6 +951,7 @@ local function toggle_panic()
         clear_base_cache()
         clear_ores()
         toggle_noclip(false)
+        toggle_move_hook(false)
     else
         wm_gui.Enabled = true
         notif_gui.Enabled = true
@@ -935,10 +978,10 @@ Rayfield.CreateWindow = function(self, opts)
 end
 
 local Window = Rayfield:CreateWindow({
-    Name = "DEGRADE | ULTIMATE v250",
+    Name = "DEGRADE | ULTIMATE v260",
     LoadingTitle = "DEGRADE",
     LoadingSubtitle = "Ultimate Scanner",
-    ConfigurationSaving = { Enabled = false, FolderName = "DegradeBuild", FileName = "v250" },
+    ConfigurationSaving = { Enabled = false, FolderName = "DegradeBuild", FileName = "v260" },
     KeySystem = false,
 })
 
@@ -954,6 +997,7 @@ CombatTab:CreateToggle({Name="Wall Check", CurrentValue=true, Flag="aim_wall", C
 
 local MovementTab = Window:CreateTab("Movement")
 MovementTab:CreateSection("Safe Glitch")
+MovementTab:CreateToggle({Name="Move Hook (Anti-Rubberband)", CurrentValue=false, Flag="movehook", Callback=function(v) toggle_move_hook(v) end})
 MovementTab:CreateToggle({Name="Noclip (RISK)", CurrentValue=false, Flag="noclip", Callback=function(v) toggle_noclip(v) end})
 MovementTab:CreateToggle({Name="Safe TP (Hold RMB)", CurrentValue=false, Flag="safetp", Callback=function(v) Config.Movement.SafeTP=v end})
 
@@ -1013,7 +1057,7 @@ SettingsTab:CreateToggle({Name="Anti-AFK", CurrentValue=false, Flag="antiafk", C
 SettingsTab:CreateLabel("Panic Key: Right Shift")
 
 task.delay(10, function()
-    send_notif("DEGRADE", "Ultimate Build v250 Loaded.", Color3.fromRGB(0, 200, 255))
+    send_notif("DEGRADE", "Ultimate Build v260 Loaded.", Color3.fromRGB(0, 200, 255))
 end)
 
-print("[DEGRADE] v250 loaded.")
+print("[DEGRADE] v260 loaded.")
