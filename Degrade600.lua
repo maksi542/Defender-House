@@ -1,4 +1,4 @@
--- language: Lua (Luau), file: degrade_ultimate_v230.lua, target: DEGRADE, executor: Solara / Delta / Fluxus
+-- language: Lua (Luau), file: degrade_ultimate_v240.lua, target: DEGRADE, executor: Solara / Delta / Fluxus
 -- CREATOR SMOKExR'S | DEGRADE Ultimate Build (by Lokeii)
 
 local Players = game:GetService("Players")
@@ -35,7 +35,7 @@ if not ok_rf or not Rayfield then
             t.Size = UDim2.new(1, -20, 1, -20)
             t.Position = UDim2.new(0, 10, 0, 10)
             t.BackgroundTransparency = 1
-            t.Text = "DEGRADE v230 — FALLBACK MODE"
+            t.Text = "DEGRADE v240 — FALLBACK MODE"
             t.TextColor3 = Color3.fromRGB(255, 50, 50)
             t.Font = Enum.Font.GothamBold
             t.TextSize = 14
@@ -82,7 +82,7 @@ local sub = Instance.new("TextLabel")
 sub.Size = UDim2.new(1, 0, 0, 20)
 sub.Position = UDim2.new(0, 0, 0.48, 0)
 sub.BackgroundTransparency = 1
-sub.Text = "ULTIMATE v230  •  loading"
+sub.Text = "ULTIMATE v240  •  loading"
 sub.TextColor3 = Color3.fromRGB(150, 150, 150)
 sub.Font = Enum.Font.Gotham
 sub.TextSize = 14
@@ -145,7 +145,7 @@ local Config = {
     BaseScan = { Enabled = false, MaxDistance = 800, CupboardColor = Color3.fromRGB(0, 255, 0), XRay = false },
     ChestScan = { Enabled = false, MaxDistance = 500, Color = Color3.fromRGB(255, 150, 0) },
     OreESP = { Enabled = false, MaxDistance = 400, Color = Color3.fromRGB(255, 255, 255) },
-    Combat = { AutoOpen = false, LootMagnet = false },
+    Combat = { FastFarm = false },
     AntiAFK = false, FPSBoost = false
 }
 
@@ -185,43 +185,20 @@ local function world_to_screen(pos)
 end
 
 -- ============================================================
--- COMBAT (Loot Magnet & Auto Open)
+-- COMBAT (Fast Farm)
 -- ============================================================
-local function combat_loop()
-    if IsPanic then return end
-    local char, hum, hrp = get_character()
-    if not char then return end
-    
-    if Config.Combat.AutoOpen then
-        for _, obj in ipairs(Workspace:GetDescendants()) do
-            if (obj:IsA("Model") or obj:IsA("Part")) and (obj.Name:lower():find("box") or obj.Name:lower():find("chest")) then
-                if (obj.Position - hrp.Position).Magnitude < 20 then
-                    local prompt = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
-                    if prompt then
-                        fireproximityprompt(prompt)
-                    end
-                end
-            end
-        end
-    end
-
-    if Config.Combat.LootMagnet then
-        for _, obj in ipairs(Workspace:GetDescendants()) do
-            if (obj:IsA("Model") or obj:IsA("Part")) and obj.Name:lower():find("loot") then
-                if (obj.Position - hrp.Position).Magnitude < 50 then
-                    local prompt = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
-                    if prompt then
-                        fireproximityprompt(prompt)
-                    end
-                end
-            end
-        end
-    end
-end
-
 task.spawn(function()
     while task.wait(0.1) do
-        if not IsPanic then combat_loop() end
+        if IsPanic or not Config.Combat.FastFarm then continue end
+        local char = get_character()
+        if not char then continue end
+        local tool = char:FindFirstChildWhichIsA("Tool")
+        if tool and tool:FindFirstChild("Handle") then
+            if UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+                -- Пытаемся активировать оружие/кирку
+                pcall(function() tool:Activate() end)
+            end
+        end
     end
 end)
 
@@ -844,10 +821,10 @@ Rayfield.CreateWindow = function(self, opts)
 end
 
 local Window = Rayfield:CreateWindow({
-    Name = "DEGRADE | ULTIMATE v230",
+    Name = "DEGRADE | ULTIMATE v240",
     LoadingTitle = "DEGRADE",
     LoadingSubtitle = "Ultimate Scanner",
-    ConfigurationSaving = { Enabled = false, FolderName = "DegradeBuild", FileName = "v230" },
+    ConfigurationSaving = { Enabled = false, FolderName = "DegradeBuild", FileName = "v240" },
     KeySystem = false,
 })
 
@@ -861,9 +838,8 @@ CombatTab:CreateSlider({Name="FOV Radius", Range={50,400}, Increment=10, Current
 CombatTab:CreateSlider({Name="Smoothness", Range={0.01,1}, Increment=0.01, CurrentValue=0.08, Flag="aim_sm", Callback=function(v) Config.Aimbot.Smoothness=v end})
 CombatTab:CreateToggle({Name="Wall Check", CurrentValue=true, Flag="aim_wall", Callback=function(v) Config.Aimbot.WallCheck=v end})
 
-CombatTab:CreateSection("Loot")
-CombatTab:CreateToggle({Name="Auto Open (Radius 20m)", CurrentValue=false, Flag="auto_open", Callback=function(v) Config.Combat.AutoOpen=v end})
-CombatTab:CreateToggle({Name="Loot Magnet (Radius 50m)", CurrentValue=false, Flag="loot_mag", Callback=function(v) Config.Combat.LootMagnet=v end})
+CombatTab:CreateSection("Farm")
+CombatTab:CreateToggle({Name="Fast Farm (Hold LMB)", CurrentValue=false, Flag="fast_farm", Callback=function(v) Config.Combat.FastFarm=v send_notif("FARM", v and "Enabled" or "Disabled", Color3.fromRGB(0,255,0)) end})
 
 local VisualTab = Window:CreateTab("Visuals")
 VisualTab:CreateSection("ESP Master")
@@ -921,5 +897,5 @@ SettingsTab:CreateToggle({Name="Anti-AFK", CurrentValue=false, Flag="antiafk", C
 SettingsTab:CreateLabel("Panic Key: Right Shift")
 
 task.delay(10, function()
-    send_notif("DEGRADE", "Ultimate Build v230 Loaded.", Color3.fromRGB(0, 200, 255))
+    send_notif("DEGRADE", "Ultimate Build v240 Loaded.", Color3.fromRGB(0, 200, 255))
 end)
